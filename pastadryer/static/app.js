@@ -102,9 +102,9 @@ function render(s) {
     const isFan = i >= s.heaters.length;
     pill.classList.toggle("active", isFan && s.venting && (i - s.heaters.length) === s.fan_active);
   });
-  let bandTxt = `Feuchte = Untergrenze · Heizung ${s.temp_low}–${s.temp_high}°C (nur wenn Feuchte ok) · Lüfter = Notnagel`;
-  if (s.drop_rate != null) bandTxt += ` · Abfall ${s.drop_rate}%/h (max ${s.allowed_drop})`;
-  if (s.resting) bandTxt += ` · 💤 Ruhe: alles aus, Feuchte erholt sich`;
+  let bandTxt = `Feuchte folgt Ideallinie · Heizung ${s.temp_low}–${s.temp_high}°C · Lüfter = Notnagel`;
+  if (s.drop_rate != null) bandTxt += ` · Abfall ${s.drop_rate}%/h`;
+  if (s.resting) bandTxt += ` · 💤 Ruhe bis ≥${s.rest_recover_to}%`;
   if (s.safety_tripped) bandTxt += " · ⚠️ Sicherheit aktiv";
   $("band").textContent = bandTxt;
 
@@ -130,7 +130,7 @@ function render(s) {
     if (ph.humidity_target != null) line += ` · Min. ${ph.humidity_target}% rF`;
     line += ` · ${ph.temp_low}–${ph.temp_high}°C`;
     if (s.phase_remaining != null) line += ` · noch ${dur(s.phase_remaining)}`;
-    if (s.resting) line += ` · 💤 Ruhe noch ${dur(s.rest_remaining)}`;
+    if (s.resting) line += ` · 💤 Ruhe bis Feuchte ≥ ${s.rest_recover_to}%`;
     $("prog-phase").textContent = line;
     if (s.phase_remaining != null) {
       if (phaseTotal === null || s.phase_remaining > phaseTotal) phaseTotal = s.phase_remaining;

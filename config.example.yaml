@@ -18,11 +18,10 @@ control:
   humidity_hysteresis: 3 # Schalt-Totband Lüfter (% rF)
   fan_cycle_min: 10      # Lüfter wechseln links/rechts alle X Minuten
   min_temp_for_fan: 0    # Lüfter erst ab dieser Temp (0 = immer erlaubt)
-  # Ruhephasen: fällt die Feuchte schneller als (Rampe + Toleranz), wird alles
-  # abgeschaltet, damit sie sich erholt.
-  drop_tolerance_per_h: 1.5  # erlaubter Abfall ÜBER der Phasen-Rampe (%/h)
-  rest_min: 120              # Dauer einer Ruhephase (Minuten)
-  rate_window_min: 40        # Messfenster für die Abfall-Geschwindigkeit (Minuten)
+  # Dynamische Ruhephase: erreicht die Feuchte die Ideallinie, wird ALLES aus-
+  # geschaltet, bis sie sich wieder über die Linie (+ humidity_hysteresis) erholt
+  # hat. Dauer = dynamisch (nicht fix).
+  rate_window_min: 40        # Messfenster nur für die angezeigte Abfall-Rate (Min.)
   # Heizung sitzt oben & braucht Zeit zum Wirken -> Mindest-Laufzeit/-Pause
   heater_min_on: 5           # Heizung läuft min. so lange (Minuten)
   heater_min_off: 5          # danach min. so lange Pause/beobachten (Minuten)
@@ -54,11 +53,13 @@ logging:
 # Heizung hält temp_low..temp_high; Lüfter regeln auf die Feuchte-Rampe
 # (humidity_start -> humidity_end über die Phasendauer). Zahlen wie 20-20-15 = h.
 programs:
-  - name: "Maccheroni (20-20-15)"
+  # Pasta mit Loch (Maccheroni, Paccheri, Rigatoni): zuerst auf min. 80% halten.
+  - name: "Maccheroni (16-20-20-12)"
     phases:
-      - { name: "80% halten", duration_h: 20, humidity_start: 80, humidity_end: 80 }
+      - { name: "80% halten", duration_h: 16, humidity_start: 80, humidity_end: 80 }
       - { name: "80→70%",     duration_h: 20, humidity_start: 80, humidity_end: 70 }
-      - { name: "70→60%",     duration_h: 15, humidity_start: 70, humidity_end: 60 }
+      - { name: "70→60%",     duration_h: 20, humidity_start: 70, humidity_end: 60 }
+      - { name: "60→50%",     duration_h: 12, humidity_start: 60, humidity_end: 50 }
 
   - name: "Caserecce (10-10-5)"
     phases:

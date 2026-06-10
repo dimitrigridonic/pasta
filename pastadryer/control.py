@@ -1,13 +1,13 @@
 """Regel-Engine für den Pasta-Trockner.
 
-Modell (vom Nutzer vorgegeben) — FEUCHTE GEWINNT IMMER:
-  • Die Phasen-Feuchte ist eine harte UNTERGRENZE; nie aktiv darunter.
-  • Heizungen halten 30–32 °C, ABER nur solange die Feuchte über dem Minimum liegt.
-    Sinkt sie aufs Minimum → Heizung aus (Temperatur darf fallen).
-  • Lüfter = letzte Stufe: nur wenn die Feuchte TROTZ Maximaltemperatur noch über
-    dem Minimum liegt, lüften wir Feuchte raus — abwechselnd links/rechts.
-  • Trocken-Programm = Phasen mit Feuchte-Rampen (z.B. 80% → 70% → 60%).
-  • Alle Sensoren werden einzeln gelesen, angezeigt und geloggt.
+Modell (vom Nutzer vorgegeben) — der IDEALLINIE folgen, FEUCHTE GEWINNT:
+  • Jede Phase definiert eine Ideallinie (Feuchte über Zeit, Rampe). Die Feuchte
+    soll ihr folgen und nie darunter fallen. Temperatur ist die Konstante (~30–32°C).
+  • Über der Linie: Heizung hält 30–32 °C (mit Trägheit/Mindestzeiten) und trocknet.
+  • An/unter der Linie: dynamische RUHEPHASE — alles aus, bis sich die Feuchte
+    wieder über die Linie (+ Reserve) erholt hat (Dauer dynamisch, nicht fix).
+  • Lüfter = Notnagel: nur bei STILLSTAND (Feuchte fällt über Stunden nicht).
+  • Sensoren einzeln gelesen/angezeigt/geloggt; Chart zeigt die Ideallinie.
 
 Modi: off | manual | program
 """
@@ -318,7 +318,7 @@ class ControlLoop:
             return
         phase = self.program.phases[self.phase_index]
 
-        # --- Feuchte = Untergrenze (Rampe innerhalb der Phase). Gewinnt immer. ---
+        # --- Ideallinie der Phase (Rampe). Die Feuchte soll ihr FOLGEN, nie drunter. ---
         self.humidity_target = self._current_humidity_target(phase)
         floor = self.humidity_target
         low = phase.temp_low if phase.temp_low is not None else self.cfg.temp_low
@@ -326,16 +326,32 @@ class ControlLoop:
         t = self.agg_temp
         h = self.agg_hum
         hyst = self.cfg.humidity_hysteresis
+        self.drop_rate = self._humidity_drop_rate()   # nur zur Anzeige
+        self.allowed_drop = None
 
-        # Nur solange die Feuchte ÜBER dem Minimum liegt, darf aktiv getrocknet
-        # (geheizt/gelüftet) werden — sonst würden wir sie unters Minimum drücken.
+        # --- Dynamische Ruhephase: an die Ideallinie gekoppelt ---
+        # Erreicht/unterschreitet die Feuchte die Linie -> ALLES aus, bis sie sich
+        # wieder über die Linie (+ Reserve) erholt hat. Dauer = dynamisch, nicht fix.
+        if floor is not None and h is not None:
+            if self.resting:
+                if h >= floor + hyst:
+                    self.resting = False
+            elif h <= floor:
+                self.resting = True
+                log.info("Ruhephase: Feuchte %.0f%% an Ideallinie %.0f%% – erholen lassen", h, floor)
+        if self.resting:
+            self.heater_on = False
+            self.venting = False
+            for ch in self.cfg.heaters + self.cfg.fans:
+                self.desired[ch.point()] = False
+            return
+
+        # ===== Über der Linie: aktiv trocknen =====
         humidity_ok = floor is None or (h is not None and h > floor)
 
-        # --- Heizung: Band low..high, nur wenn Feuchte okay; mit Trägheit ---
-        # Die Heizung sitzt oben & braucht ~2-3 min zum Wirken: deshalb
-        # Mindest-Laufzeit (heater_min_on) und Mindest-Pause (heater_min_off).
+        # --- Heizung: Band low..high mit Trägheit (Heizung sitzt oben, ~2-3 min bis Wirkung) ---
         nowm = time.monotonic()
-        force_off = (t is None) or (not humidity_ok)   # Feuchte am Minimum -> sofort aus
+        force_off = (t is None) or (not humidity_ok)   # an der Linie -> sofort aus
         if force_off:
             band_on = False
         elif t < low:
@@ -345,20 +361,19 @@ class ControlLoop:
         else:
             band_on = self.heater_on            # im Band: Zustand halten
         desired_heater = band_on
-        if not force_off:
+        if not force_off:                       # Mindest-Laufzeit/-Pause respektieren
             elapsed = nowm - self._heater_changed_at
             if self.heater_on and not desired_heater and elapsed < self.cfg.heater_min_on * 60:
-                desired_heater = True            # war zu kurz an -> weiterlaufen lassen
+                desired_heater = True
             elif not self.heater_on and desired_heater and elapsed < self.cfg.heater_min_off * 60:
-                desired_heater = False           # Beobachtungspause -> noch nicht starten
+                desired_heater = False
         if desired_heater != self.heater_on:
             self._heater_changed_at = nowm
         self.heater_on = desired_heater
         for hch in self.cfg.heaters:
             self.desired[hch.point()] = self.heater_on
 
-        # --- Lüfter: Notnagel. Nur wenn die Feuchte über fan_stall_h STUNDEN
-        #     praktisch NICHT fällt (Stillstand) trotz Heizung. Nie unters Minimum. ---
+        # --- Lüfter: Notnagel nur bei STILLSTAND (>fan_stall_h ohne Abfall) ---
         if floor is not None and h is not None:
             stall = self._drop_over(self.cfg.fan_stall_h * 3600)
             stalled = stall is not None and stall[0] < self.cfg.fan_stall_drop
@@ -366,11 +381,8 @@ class ControlLoop:
                 self.venting = True
             elif h <= floor + hyst:
                 self.venting = False
-            # sonst: Zustand halten (läuft bis nahe Minimum)
         else:
             self.venting = False
-
-        # alternierende Seite weiterschalten
         if self.cfg.fans:
             cycle = self.cfg.fan_cycle_min * 60
             if time.monotonic() - self._fan_cycle_started >= cycle:
@@ -378,29 +390,6 @@ class ControlLoop:
                 self._fan_cycle_started = time.monotonic()
         for i, f in enumerate(self.cfg.fans):
             self.desired[f.point()] = self.venting and (i == self.fan_active)
-
-        # --- Ruhephasen: reagieren, wenn die Feuchte ZU SCHNELL fällt ---
-        # Soll-Abfall = Rampe der Phase (z.B. 80->70 in 20h = 0.5%/h) + Toleranz.
-        ramp_rate = 0.0
-        if (phase.humidity_start is not None and phase.humidity_end is not None
-                and phase.duration_h):
-            ramp_rate = max(0.0, (phase.humidity_start - phase.humidity_end) / phase.duration_h)
-        self.allowed_drop = ramp_rate + self.cfg.drop_tolerance_per_h
-        self.drop_rate = self._humidity_drop_rate()
-        nowm = time.monotonic()
-        if self.resting:
-            if nowm >= self._rest_until:
-                self.resting = False
-        elif self.drop_rate is not None and self.drop_rate > self.allowed_drop:
-            self.resting = True
-            self._rest_until = nowm + self.cfg.rest_min * 60
-            log.info("Ruhephase gestartet: Feuchte fällt %.1f%%/h (erlaubt %.1f%%/h)",
-                     self.drop_rate, self.allowed_drop)
-        if self.resting:  # alles aus, Feuchte erholen lassen
-            self.heater_on = False
-            self.venting = False
-            for ch in self.cfg.heaters + self.cfg.fans:
-                self.desired[ch.point()] = False
 
     def _current_humidity_target(self, phase) -> float | None:
         if phase.humidity_start is None:
@@ -488,9 +477,9 @@ class ControlLoop:
             "venting": self.venting,
             "fan_active": self.fan_active,
             "resting": self.resting,
-            "rest_remaining": max(0, int(self._rest_until - time.monotonic())) if self.resting else None,
+            "rest_recover_to": round(self.humidity_target + self.cfg.humidity_hysteresis, 1)
+                if (self.resting and self.humidity_target is not None) else None,
             "drop_rate": round(self.drop_rate, 2) if self.drop_rate is not None else None,
-            "allowed_drop": round(self.allowed_drop, 2) if self.allowed_drop is not None else None,
             "heaters": [{"name": h.name, "on": self.desired.get(h.point(), False),
                          "aid": h.aid, "iid": h.iid} for h in self.cfg.heaters],
             "fans": [{"name": f.name, "on": self.desired.get(f.point(), False),
