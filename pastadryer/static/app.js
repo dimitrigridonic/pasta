@@ -69,8 +69,11 @@ function render(s) {
   $("temp").textContent = fmt(s.agg_temp);
   $("hum").textContent = fmt(s.agg_hum, 0);
   const badge = $("mode-badge");
-  badge.textContent = s.mode === "off" ? "Aus" : s.mode === "manual" ? "Manuell" : "Programm";
-  badge.className = "badge " + (s.mode === "program" ? "program" : s.mode === "manual" ? "manual" : "");
+  if (s.resting) { badge.textContent = "💤 Ruhephase"; badge.className = "badge rest"; }
+  else {
+    badge.textContent = s.mode === "off" ? "Aus" : s.mode === "manual" ? "Manuell" : "Programm";
+    badge.className = "badge " + (s.mode === "program" ? "program" : s.mode === "manual" ? "manual" : "");
+  }
 
   buildActuators(s);
   [...s.heaters, ...s.fans].forEach((ch, i) => {
@@ -79,8 +82,11 @@ function render(s) {
     const isFan = i >= s.heaters.length;
     pill.classList.toggle("active", isFan && s.venting && (i - s.heaters.length) === s.fan_active);
   });
-  $("band").textContent = `Feuchte = Untergrenze · Heizung ${s.temp_low}–${s.temp_high}°C (nur wenn Feuchte ok) · ` +
-    `Lüfter nur als Notnagel bei ${s.temp_high}°C` + (s.safety_tripped ? " · ⚠️ Sicherheit aktiv" : "");
+  let bandTxt = `Feuchte = Untergrenze · Heizung ${s.temp_low}–${s.temp_high}°C (nur wenn Feuchte ok) · Lüfter = Notnagel`;
+  if (s.drop_rate != null) bandTxt += ` · Abfall ${s.drop_rate}%/h (max ${s.allowed_drop})`;
+  if (s.resting) bandTxt += ` · 💤 Ruhe: alles aus, Feuchte erholt sich`;
+  if (s.safety_tripped) bandTxt += " · ⚠️ Sicherheit aktiv";
+  $("band").textContent = bandTxt;
 
   buildManual(s);
   [...s.heaters, ...s.fans].forEach((ch) => {
@@ -104,6 +110,7 @@ function render(s) {
     if (ph.humidity_target != null) line += ` · Min. ${ph.humidity_target}% rF`;
     line += ` · ${ph.temp_low}–${ph.temp_high}°C`;
     if (s.phase_remaining != null) line += ` · noch ${dur(s.phase_remaining)}`;
+    if (s.resting) line += ` · 💤 Ruhe noch ${dur(s.rest_remaining)}`;
     $("prog-phase").textContent = line;
     if (s.phase_remaining != null) {
       if (phaseTotal === null || s.phase_remaining > phaseTotal) phaseTotal = s.phase_remaining;

@@ -18,6 +18,11 @@ control:
   humidity_hysteresis: 3 # Schalt-Totband Lüfter (% rF)
   fan_cycle_min: 10      # Lüfter wechseln links/rechts alle X Minuten
   min_temp_for_fan: 0    # Lüfter erst ab dieser Temp (0 = immer erlaubt)
+  # Ruhephasen: fällt die Feuchte schneller als (Rampe + Toleranz), wird alles
+  # abgeschaltet, damit sie sich erholt.
+  drop_tolerance_per_h: 1.5  # erlaubter Abfall ÜBER der Phasen-Rampe (%/h)
+  rest_min: 120              # Dauer einer Ruhephase (Minuten)
+  rate_window_min: 40        # Messfenster für die Abfall-Geschwindigkeit (Minuten)
 
 # Relais-Kanäle (identifiziert per Schalttest)
 heaters:

@@ -80,6 +80,9 @@ class Config:
     humidity_hysteresis: float
     fan_cycle_min: float      # Wechsel-Takt links/rechts (Minuten)
     min_temp_for_fan: float   # Lüfter erst ab dieser Temp
+    drop_tolerance_per_h: float  # erlaubter Feuchte-Abfall ÜBER der Soll-Rampe (%/h)
+    rest_min: float           # Dauer einer Ruhephase (Minuten)
+    rate_window_min: float    # Fenster zur Messung der Abfall-Geschwindigkeit (Minuten)
     # Geräte
     heaters: list[Channel]
     fans: list[Channel]
@@ -114,6 +117,9 @@ class Config:
             humidity_hysteresis=float(c.get("humidity_hysteresis", 3)),
             fan_cycle_min=float(c.get("fan_cycle_min", 10)),
             min_temp_for_fan=float(c.get("min_temp_for_fan", 0)),
+            drop_tolerance_per_h=float(c.get("drop_tolerance_per_h", 1.5)),
+            rest_min=float(c.get("rest_min", 120)),
+            rate_window_min=float(c.get("rate_window_min", 40)),
             heaters=[Channel.parse(x) for x in raw.get("heaters", [])],
             fans=[Channel.parse(x) for x in raw.get("fans", [])],
             sensors=[SensorCfg.parse(x) for x in raw.get("sensors", [])],

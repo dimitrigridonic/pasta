@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import time
+from collections import deque
 
 from .config import Config
 from .history import History
@@ -76,6 +77,13 @@ class ControlLoop:
         self.safety_tripped = False
         self.last_error: str | None = None
         self._last_log = 0.0
+
+        # Ruhephasen / Abfall-Wächter
+        self._hum_hist: deque = deque()      # (monotonic, agg_hum)
+        self.resting = False
+        self._rest_until = 0.0
+        self.drop_rate: float | None = None  # %-Punkte/h fallend (positiv)
+        self.allowed_drop: float | None = None
 
         self._task: asyncio.Task | None = None
         self._wake = asyncio.Event()
@@ -157,6 +165,7 @@ class ControlLoop:
     def set_off(self) -> None:
         self.mode = "off"
         self.program = None
+        self.resting = False
         self._kick()
 
     def set_manual(self, aid: int, iid: int, value: bool) -> None:
@@ -174,6 +183,8 @@ class ControlLoop:
         self._phase_started = time.monotonic()
         self._program_started = time.time()
         self.mode = "program"
+        self.resting = False
+        self._hum_hist.clear()
         self._kick()
         return True
 
@@ -221,6 +232,12 @@ class ControlLoop:
                     if v is not None:
                         s["hum"] = round(float(v), 1)
             self._aggregate()
+            if self.agg_hum is not None:
+                nowm = time.monotonic()
+                self._hum_hist.append((nowm, self.agg_hum))
+                cutoff = nowm - (self.cfg.rate_window_min * 60 + 120)
+                while self._hum_hist and self._hum_hist[0][0] < cutoff:
+                    self._hum_hist.popleft()
             self.last_reading_ok = True
             self.last_reading_at = time.time()
             self.last_error = None
@@ -245,6 +262,21 @@ class ControlLoop:
 
         self.agg_temp = agg(temps)
         self.agg_hum = agg(hums)
+
+    def _humidity_drop_rate(self) -> float | None:
+        """Feuchte-Abfall in %-Punkten/Stunde über das Messfenster (positiv = fallend)."""
+        if len(self._hum_hist) < 2:
+            return None
+        now = time.monotonic()
+        window = self.cfg.rate_window_min * 60
+        oldest = next(((ts, hv) for ts, hv in self._hum_hist if now - ts <= window), None)
+        if oldest is None:
+            return None
+        newest_ts, newest_h = self._hum_hist[-1]
+        dt = newest_ts - oldest[0]
+        if dt < window * 0.6:          # noch nicht genug Zeitspanne gemessen
+            return None
+        return (oldest[1] - newest_h) / (dt / 3600)
 
     # ---- Regel-Logik -----------------------------------------------------
     def _decide(self) -> None:
@@ -323,6 +355,29 @@ class ControlLoop:
                 self._fan_cycle_started = time.monotonic()
         for i, f in enumerate(self.cfg.fans):
             self.desired[f.point()] = self.venting and (i == self.fan_active)
+
+        # --- Ruhephasen: reagieren, wenn die Feuchte ZU SCHNELL fällt ---
+        # Soll-Abfall = Rampe der Phase (z.B. 80->70 in 20h = 0.5%/h) + Toleranz.
+        ramp_rate = 0.0
+        if (phase.humidity_start is not None and phase.humidity_end is not None
+                and phase.duration_h):
+            ramp_rate = max(0.0, (phase.humidity_start - phase.humidity_end) / phase.duration_h)
+        self.allowed_drop = ramp_rate + self.cfg.drop_tolerance_per_h
+        self.drop_rate = self._humidity_drop_rate()
+        nowm = time.monotonic()
+        if self.resting:
+            if nowm >= self._rest_until:
+                self.resting = False
+        elif self.drop_rate is not None and self.drop_rate > self.allowed_drop:
+            self.resting = True
+            self._rest_until = nowm + self.cfg.rest_min * 60
+            log.info("Ruhephase gestartet: Feuchte fällt %.1f%%/h (erlaubt %.1f%%/h)",
+                     self.drop_rate, self.allowed_drop)
+        if self.resting:  # alles aus, Feuchte erholen lassen
+            self.heater_on = False
+            self.venting = False
+            for ch in self.cfg.heaters + self.cfg.fans:
+                self.desired[ch.point()] = False
 
     def _current_humidity_target(self, phase) -> float | None:
         if phase.humidity_start is None:
@@ -409,6 +464,10 @@ class ControlLoop:
             "heater_on": self.heater_on,
             "venting": self.venting,
             "fan_active": self.fan_active,
+            "resting": self.resting,
+            "rest_remaining": max(0, int(self._rest_until - time.monotonic())) if self.resting else None,
+            "drop_rate": round(self.drop_rate, 2) if self.drop_rate is not None else None,
+            "allowed_drop": round(self.allowed_drop, 2) if self.allowed_drop is not None else None,
             "heaters": [{"name": h.name, "on": self.desired.get(h.point(), False),
                          "aid": h.aid, "iid": h.iid} for h in self.cfg.heaters],
             "fans": [{"name": f.name, "on": self.desired.get(f.point(), False),
