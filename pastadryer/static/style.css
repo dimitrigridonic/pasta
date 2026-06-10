@@ -4,8 +4,8 @@ html { font-size: clamp(15px, calc(11.8px + 0.4vw), 19px); }
 
 :root {
   --bg: #000;
-  --surface: #0c0c0e;
-  --surface-2: #161619;
+  --surface: #141417;
+  --surface-2: #1d1d21;
   --line: #26262b;
   --text: #f4f4f5;
   --muted: #8b8b93;
@@ -65,6 +65,13 @@ body {
 .span-all { grid-column: 1 / -1; }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: var(--pad); }
+.kpi-card { display: flex; flex-direction: column; gap: 0.45rem; justify-content: center; }
+.kpi-label { color: var(--muted); font-size: 0.82rem; }
+.kpi-val { display: flex; align-items: baseline; gap: 0.35rem; line-height: 1; }
+.kpi-val b { font-size: clamp(2.1rem, 1.2rem + 3.4vw, 3rem); font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi-val.t b { color: var(--hot); } .kpi-val.h b { color: var(--cool); }
+.kpi-unit { color: var(--muted); font-size: 0.9rem; }
+.kpi-sub { color: var(--muted); font-size: 0.78rem; min-height: 1em; }
 .card h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 0.8rem; font-weight: 700; }
 .card h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); flex-wrap: wrap; margin-bottom: 0.6rem; }

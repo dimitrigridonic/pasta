@@ -4,15 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
-  <link rel="stylesheet" href="/static/style.css?v=16" />
+  <link rel="stylesheet" href="/static/style.css?v=17" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">🍝 <span>Pasta-Trockner</span></div>
-    <div class="kpis">
-      <div class="kpi t"><b id="temp">–</b><small>°C ⌀</small></div>
-      <div class="kpi h"><b id="hum">–</b><small>% rF ⌀</small></div>
-    </div>
     <div class="meta">
       <span id="mode-badge" class="badge">–</span>
       <span id="conn" class="conn">verbinde…</span>
@@ -26,6 +22,18 @@
   <div id="banner" class="banner hidden"></div>
 
   <main class="dash">
+    <!-- KPIs -->
+    <section class="card kpi-card">
+      <div class="kpi-label">Temperatur ⌀</div>
+      <div class="kpi-val t"><b id="temp">–</b><span class="kpi-unit">°C</span></div>
+      <div class="kpi-sub" id="temp-sub"></div>
+    </section>
+    <section class="card kpi-card">
+      <div class="kpi-label">Feuchte ⌀</div>
+      <div class="kpi-val h"><b id="hum">–</b><span class="kpi-unit">% rF</span></div>
+      <div class="kpi-sub" id="hum-sub"></div>
+    </section>
+
     <!-- Steuerung -->
     <section class="card">
       <h2>Steuerung</h2>
@@ -108,6 +116,6 @@
   </main>
 
   <footer id="foot"></footer>
-  <script src="/static/app.js?v=16"></script>
+  <script src="/static/app.js?v=17"></script>
 </body>
 </html>

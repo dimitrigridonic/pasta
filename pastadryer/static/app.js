@@ -157,6 +157,9 @@ function render(s) {
 
   $("temp").textContent = fmt(s.agg_temp);
   $("hum").textContent = fmt(s.agg_hum, 0);
+  $("temp-sub").textContent = `Band ${s.temp_low}–${s.temp_high} °C`;
+  $("hum-sub").textContent = s.phase && s.phase.humidity_target != null
+    ? `Ideallinie ${s.phase.humidity_target}%` : (s.preheating ? "Vorheizen…" : "");
   const badge = $("mode-badge");
   if (s.resting) { badge.textContent = "💤 Ruhephase"; badge.className = "badge rest"; }
   else {
