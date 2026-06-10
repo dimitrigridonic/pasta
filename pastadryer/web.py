@@ -70,7 +70,7 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
     async def state():
         return loop.state()
 
-    @app.post("/api/off")
+    @app.api_route("/api/off", methods=["GET", "POST"])
     async def off():
         loop.set_off()
         return loop.state()
@@ -86,12 +86,12 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
             return JSONResponse({"error": "unbekanntes Programm"}, status_code=404)
         return loop.state()
 
-    @app.post("/api/program/stop")
+    @app.api_route("/api/program/stop", methods=["GET", "POST"])
     async def program_stop():
         loop.set_off()
         return loop.state()
 
-    @app.post("/api/program/skip")
+    @app.api_route("/api/program/skip", methods=["GET", "POST"])
     async def program_skip():
         loop.skip_phase()
         return loop.state()
