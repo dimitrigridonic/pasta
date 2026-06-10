@@ -20,7 +20,7 @@ function idealHumidityAt(t, started, phases) {
   const last = phases[phases.length - 1];
   return last ? (last.humidity_end != null ? last.humidity_end : last.humidity_start) : null;
 }
-const PALETTE = ["#f23882", "#56b6e0", "#ff7a59", "#36d399", "#c678dd", "#e0b04c", "#7bd0c8", "#9aa0ff"];
+const PALETTE = ["#009353", "#56b6e0", "#ff7a59", "#36d399", "#c678dd", "#e0b04c", "#7bd0c8", "#9aa0ff"];
 
 async function api(path, body, method) {
   const opts = { method: method || (body ? "POST" : "GET") };
@@ -110,7 +110,7 @@ function renderDryer(s) {
     const h = se && se.hum != null ? `${Math.round(se.hum)}%` : "";
     sensors += `<g>
       <rect x="${x - 37}" y="${y - 15}" width="74" height="30" rx="9" fill="#17171c" stroke="#34343e"/>
-      <circle cx="${x - 25}" cy="${y}" r="4.5" fill="#f23882"/>
+      <circle cx="${x - 25}" cy="${y}" r="4.5" fill="#009353"/>
       <text x="${x - 14}" y="${y - 2}" class="dl-s" text-anchor="start">S${n}</text>
       <text x="${x - 14}" y="${y + 10}" class="dl-v" text-anchor="start">${t} ${h}</text></g>`;
   }
@@ -120,7 +120,7 @@ function renderDryer(s) {
     const hOn = s.heaters[isLeft ? 0 : 1] && s.heaters[isLeft ? 0 : 1].on;
     const fOn = s.fans[isLeft ? 0 : 1] && s.fans[isLeft ? 0 : 1].on;
     const ring = ((isLeft && leftBlow) || (!isLeft && rightBlow))
-      ? `<rect x="${cx - 54}" y="55" width="108" height="50" rx="14" fill="none" stroke="#f23882" stroke-width="2.5"/>` : "";
+      ? `<rect x="${cx - 54}" y="55" width="108" height="50" rx="14" fill="none" stroke="#009353" stroke-width="2.5"/>` : "";
     const side = isLeft ? "L" : "R";
     return `${ring}
       <rect x="${cx - 48}" y="63" width="58" height="34" rx="9" fill="${hOn ? "#ff7a59" : "#382722"}"${hOn ? ' filter="url(#dglow)"' : ""}/>
@@ -181,13 +181,22 @@ function render(s) {
     s.programs.forEach((p) => { const o = document.createElement("option"); o.value = o.textContent = p; sel.appendChild(o); });
     if (s.programs.includes(keep)) sel.value = keep;
   }
-  const running = s.mode === "program" && s.phase;
+  const running = s.mode === "program" && (s.preheating || s.phase);
   $("program-start").classList.toggle("hidden", running);
   $("program-stop").classList.toggle("hidden", !running);
   $("program-status").classList.toggle("hidden", !running);
   $("prog-running").classList.toggle("hidden", !running);
   $("prog-empty").classList.toggle("hidden", running);
-  if (running) {
+  if (running && s.preheating) {
+    $("prog-name").textContent = `${s.program} — Vorheizen`;
+    let l = `🔥 Heizt leeren Kasten auf ${s.preheat.target}°C · aktuell ${fmt(s.agg_temp)}°C`;
+    if (s.preheat.remaining != null) l += ` · max noch ${dur(s.preheat.remaining)}`;
+    l += ` · dann Pasta einstellen`;
+    $("prog-phase").textContent = l;
+    const pct = s.agg_temp != null ? Math.min(100, Math.max(0, (s.agg_temp - 20) / (s.preheat.target - 20) * 100)) : 0;
+    $("prog-bar-fill").style.width = `${pct}%`;
+    phaseTotal = null;
+  } else if (running) {
     $("prog-name").textContent = s.program;
     const ph = s.phase;
     let line = `Phase ${ph.index + 1}/${ph.count}: ${ph.name}`;

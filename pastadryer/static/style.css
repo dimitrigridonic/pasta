@@ -9,13 +9,13 @@ html { font-size: clamp(15px, calc(11.8px + 0.4vw), 19px); }
   --line: #26262b;
   --text: #f4f4f5;
   --muted: #8b8b93;
-  --accent: #f23882;     /* Magenta */
-  --accent-600: #c42060;
+  --accent: #009353;     /* Grün */
+  --accent-600: #00713f;
   --hot: #ff7a59;
   --cool: #56b6e0;
   --on: #36d399;
   --off: #2a2a30;
-  --danger: #f23882;
+  --danger: #e2433f;
 
   --r: clamp(0.7rem, 0.4rem + 0.9vw, 1.1rem);
   --pad: clamp(0.85rem, 0.5rem + 1vw, 1.3rem);
@@ -53,7 +53,7 @@ body {
 .conn { color: var(--muted); font-size: 0.7rem; }
 .conn.stale { color: var(--danger); }
 
-.banner { background: var(--accent); color: #fff; padding: 0.7rem 1rem; border-radius: var(--r); margin-bottom: var(--gap); font-size: 0.85rem; }
+.banner { background: var(--danger); color: #fff; padding: 0.7rem 1rem; border-radius: var(--r); margin-bottom: var(--gap); font-size: 0.85rem; }
 .fault { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; background: #2a0a12; border: 1.5px solid var(--danger); color: #ffd9e6; padding: 0.9rem 1.1rem; border-radius: var(--r); margin-bottom: var(--gap); font-weight: 600; }
 .fault #fault-text { flex: 1; min-width: 200px; }
 .fault .btn { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 700; flex: none; }

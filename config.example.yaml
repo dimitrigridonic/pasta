@@ -16,6 +16,10 @@ control:
   temp_high: 32          # Heizungen AUS oberhalb (°C)
   max_temp: 38           # harte Sicherheits-Abschaltung der Heizungen (°C)
   heater_max_on: 6       # SICHERHEIT: Heizung-Dauerlauf > X min -> Not-Aus + verriegeln
+  # Vorheizen bei leerem Kasten vor JEDEM Programm (Seiten wechseln ab):
+  preheat_enabled: true
+  preheat_target: 30     # vorheizen bis diese Temperatur (°C)
+  preheat_max_min: 30    # höchstens so lange (Minuten) -> dann Pasta einstellen
   humidity_hysteresis: 3 # Schalt-Totband Lüfter (% rF)
   fan_cycle_min: 5       # Seitenwechsel links/rechts alle X Min. (MUSS < heater_max_on!)
   min_temp_for_fan: 0    # Lüfter erst ab dieser Temp (0 = immer erlaubt)

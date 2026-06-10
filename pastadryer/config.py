@@ -88,6 +88,9 @@ class Config:
     fan_stall_h: float        # Lüfter erst, wenn Feuchte so lange (h) nicht fällt
     fan_stall_drop: float     # … und in dieser Zeit weniger als X %-Punkte gefallen ist
     heater_max_on: float      # SICHERHEIT: Heizung-Dauerlauf > X min -> Not-Aus + verriegeln
+    preheat_enabled: bool     # Vorheizphase vor jedem Programm (leerer Kasten)
+    preheat_target: float     # Vorheizen bis diese Temperatur (°C)
+    preheat_max_min: float    # … höchstens so lange (Minuten)
     # Geräte
     heaters: list[Channel]
     fans: list[Channel]
@@ -130,6 +133,9 @@ class Config:
             fan_stall_h=float(c.get("fan_stall_h", 5)),
             fan_stall_drop=float(c.get("fan_stall_drop", 1.0)),
             heater_max_on=float(c.get("heater_max_on", 6)),
+            preheat_enabled=bool(c.get("preheat_enabled", True)),
+            preheat_target=float(c.get("preheat_target", 30)),
+            preheat_max_min=float(c.get("preheat_max_min", 30)),
             heaters=[Channel.parse(x) for x in raw.get("heaters", [])],
             fans=[Channel.parse(x) for x in raw.get("fans", [])],
             sensors=[SensorCfg.parse(x) for x in raw.get("sensors", [])],

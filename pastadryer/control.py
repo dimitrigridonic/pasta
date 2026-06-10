@@ -75,6 +75,8 @@ class ControlLoop:
         self.phase_index = 0
         self._phase_started: float | None = None
         self._program_started: float | None = None
+        self.preheating = False          # Vorheizphase (leerer Kasten)
+        self._preheat_started: float | None = None
         self.humidity_target: float | None = None
         self.safety_tripped = False
         self.last_error: str | None = None
@@ -213,12 +215,19 @@ class ControlLoop:
         self.mode = "program"
         self.resting = False
         self._hum_hist.clear()
+        self.preheating = self.cfg.preheat_enabled
+        self._preheat_started = time.monotonic()
         self._kick()
         return True
 
     def skip_phase(self) -> None:
         if self.mode == "program" and self.program:
-            self._advance_phase(force=True)
+            if self.preheating:
+                self.preheating = False
+                self.phase_index = 0
+                self._phase_started = time.monotonic()
+            else:
+                self._advance_phase(force=True)
             self._kick()
 
     # ---- Hauptschleife ---------------------------------------------------
@@ -354,9 +363,35 @@ class ControlLoop:
             for ch in self.cfg.heaters + self.cfg.fans:
                 self.desired[ch.point()] = False
 
+    def _decide_preheat(self) -> None:
+        """Vorheizen bei leerem Kasten: bis Zieltemperatur heizen (Seiten wechseln)."""
+        target = self.cfg.preheat_target
+        t = self.agg_temp
+        elapsed = time.monotonic() - (self._preheat_started or time.monotonic())
+        if (t is not None and t >= target) or elapsed >= self.cfg.preheat_max_min * 60:
+            self.preheating = False
+            self.phase_index = 0
+            self._phase_started = time.monotonic()
+            log.info("Vorheizen fertig (%.1f°C / %.0f min) -> Programm startet",
+                     t if t is not None else -1, elapsed / 60)
+            return
+        self.heater_on = (t is None) or (t < target)
+        self.venting = False
+        n = max(len(self.cfg.heaters), 1)
+        if time.monotonic() - self._fan_cycle_started >= self.cfg.fan_cycle_min * 60:
+            self.active_side = (self.active_side + 1) % n
+            self._fan_cycle_started = time.monotonic()
+        for i, hch in enumerate(self.cfg.heaters):
+            self.desired[hch.point()] = self.heater_on and (i == self.active_side)
+        for f in self.cfg.fans:
+            self.desired[f.point()] = False
+
     def _decide_program(self) -> None:
         if not self.program:
             self.set_off()
+            return
+        if self.preheating:
+            self._decide_preheat()
             return
         self._advance_phase()
         if self.mode != "program":
@@ -538,6 +573,13 @@ class ControlLoop:
             "max_temp": self.cfg.max_temp,
             "heater_max_on": self.cfg.heater_max_on,
             "program": self.program.name if self.program else None,
+            "preheating": self.preheating,
+            "preheat": ({
+                "target": self.cfg.preheat_target,
+                "remaining": (max(0, int(self.cfg.preheat_max_min * 60
+                              - (time.monotonic() - self._preheat_started)))
+                              if self._preheat_started else None),
+            } if self.preheating else None),
             "phase": phase,
             "phase_remaining": phase_remaining,
             "program_started": self._program_started,
