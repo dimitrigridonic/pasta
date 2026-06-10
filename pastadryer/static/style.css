@@ -131,5 +131,15 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .icon-btn { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 0.3rem; }
 .icon-btn:hover { color: var(--danger); }
 
+/* ---- Trockner-Schema ---- */
+#dryer { width: 100%; }
+.dryer-svg { width: 100%; height: auto; max-height: 62vh; display: block; }
+.dryer-svg .dl-s { fill: #fff; font: 700 11px system-ui; }
+.dryer-svg .dl-v { fill: #cfcfd6; font: 600 9px system-ui; }
+.dryer-svg .dl-c { fill: #8b8b93; font: 10px system-ui; }
+.dryer-flow { fill: none; stroke: var(--cool); stroke-width: 2.5; stroke-dasharray: 6 8; opacity: .6; animation: dryerflow 1.4s linear infinite; }
+.dryer-flow.rev { animation-direction: reverse; }
+@keyframes dryerflow { to { stroke-dashoffset: -28; } }
+
 footer { text-align: center; color: var(--muted); font-size: 0.72rem; margin-top: var(--gap); padding-top: var(--gap); }
 footer.stale { color: var(--danger); }

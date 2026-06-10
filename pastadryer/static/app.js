@@ -80,6 +80,60 @@ function renderSensors(s) {
   $("agg-note").textContent = `· Regelwert = ${s.aggregate}`;
 }
 
+/* ---------- Trockner-Schema ---------- */
+// Sensor-Nummer -> Position [x,y] (Seitenansicht). Telai-Reihen y: 110..200.
+const DRYER_POS = { 1: [240, 128], 2: [126, 164], 3: [354, 182], 4: [240, 182], 5: [354, 128], 6: [126, 200] };
+const sNum = (name) => { const m = String(name).match(/(\d+)/); return m ? +m[1] : null; };
+
+function renderDryer(s) {
+  const box = $("dryer"); if (!box) return;
+  const left = s.active_side === 0;
+  $("dryer-side").textContent = `aktive Seite: ${left ? "◀ LINKS" : "RECHTS ▶"}`;
+  const heat = (i) => (s.heaters[i] && s.heaters[i].on) ? "#ff7a59" : "#3a2a26";
+  const fan = (i) => (s.fans[i] && s.fans[i].on) ? "#56b6e0" : "#243038";
+  const outline = (isLeft) => (left === isLeft) ? ' stroke="#f23882" stroke-width="2.5"' : ' stroke="#3a3a40" stroke-width="1"';
+  const val = {}; s.sensors.forEach((se) => { const n = sNum(se.name); if (n) val[n] = se; });
+
+  let telai = "";
+  [110, 128, 146, 164, 182, 200].forEach((y) => {
+    telai += `<line x1="100" y1="${y}" x2="380" y2="${y}" stroke="#3a3a40" stroke-width="2" stroke-dasharray="3 4"/>`;
+  });
+  let sensors = "";
+  for (const n in DRYER_POS) {
+    const [x, y] = DRYER_POS[n], se = val[n];
+    const t = se && se.temp != null ? `${se.temp.toFixed(1)}°` : "–";
+    const h = se && se.hum != null ? `${Math.round(se.hum)}%` : "";
+    sensors += `<g>
+      <circle cx="${x}" cy="${y}" r="5.5" fill="#f23882" stroke="#000"/>
+      <text x="${x}" y="${y - 9}" text-anchor="middle" class="dl-s">S${n}</text>
+      <text x="${x}" y="${y + 16}" text-anchor="middle" class="dl-v">${t} ${h}</text></g>`;
+  }
+  // Zirkulations-Loop (marschierende Striche; Richtung kehrt mit der aktiven Seite)
+  const loop = `M 106 110 H 374 A 12 12 0 0 1 386 122 V 230 A 12 12 0 0 1 374 242 H 106 A 12 12 0 0 1 94 230 V 122 A 12 12 0 0 1 106 110 Z`;
+
+  box.innerHTML = `<svg viewBox="0 0 480 300" class="dryer-svg" xmlns="http://www.w3.org/2000/svg">
+    <!-- Windkanal -->
+    <rect x="64" y="56" width="352" height="32" rx="5" fill="#161619" stroke="#3a3a40"/>
+    <text x="240" y="76" text-anchor="middle" class="dl-c">Windkanal</text>
+    <!-- Kammer -->
+    <rect x="64" y="92" width="352" height="170" rx="6" fill="#0c0c0e" stroke="#26262b"/>
+    ${telai}
+    <text x="74" y="100" class="dl-c">Telai (6)</text>
+    <text x="74" y="256" class="dl-c">Leerraum</text>
+    <!-- Heizung/Lüfter links -->
+    <rect x="66" y="58" width="74" height="28" rx="4" fill="${heat(0)}"${outline(true)}/>
+    <rect x="66" y="58" width="36" height="28" rx="4" fill="${fan(0)}" opacity="0.85"/>
+    <text x="103" y="76" text-anchor="middle" class="dl-c">L</text>
+    <!-- Heizung/Lüfter rechts -->
+    <rect x="340" y="58" width="74" height="28" rx="4" fill="${heat(1)}"${outline(false)}/>
+    <rect x="378" y="58" width="36" height="28" rx="4" fill="${fan(1)}" opacity="0.85"/>
+    <text x="377" y="76" text-anchor="middle" class="dl-c">R</text>
+    <!-- Zirkulation -->
+    <path d="${loop}" class="dryer-flow ${left ? "" : "rev"}"/>
+    ${sensors}
+  </svg>`;
+}
+
 function render(s) {
   state = s;
   if (view === null) view = s.mode;
@@ -99,8 +153,8 @@ function render(s) {
   [...s.heaters, ...s.fans].forEach((ch, i) => {
     const pill = $(`pill-${ch.aid}-${ch.iid}`); if (!pill) return;
     pill.classList.toggle("on", !!ch.on);
-    const isFan = i >= s.heaters.length;
-    pill.classList.toggle("active", isFan && s.venting && (i - s.heaters.length) === s.fan_active);
+    const sideIdx = i < s.heaters.length ? i : i - s.heaters.length;
+    pill.classList.toggle("active", sideIdx === s.active_side);
   });
   let bandTxt = `Feuchte folgt Ideallinie · Heizung ${s.temp_low}–${s.temp_high}°C · Lüfter = Notnagel`;
   if (s.drop_rate != null) bandTxt += ` · Abfall ${s.drop_rate}%/h`;
@@ -139,6 +193,7 @@ function render(s) {
   } else phaseTotal = null;
 
   renderSensors(s);
+  renderDryer(s);
 
   const banner = $("banner");
   if (s.safety_tripped) { banner.textContent = `⚠️ Sicherheitsabschaltung: ≥ ${s.max_temp}°C – Heizungen aus`; banner.classList.remove("hidden"); }

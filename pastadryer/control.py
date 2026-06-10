@@ -66,7 +66,7 @@ class ControlLoop:
         # Heizung/Lüfter-Status (für Anzeige)
         self.heater_on = False
         self._heater_changed_at = 0.0  # für Mindest-Laufzeit/-Pause (Trägheit)
-        self.fan_active = 0          # Index in cfg.fans (alternierende Seite)
+        self.active_side = 0         # aktive Seite (0=links, 1=rechts) – Heizung UND Lüfter
         self.venting = False
         self._fan_cycle_started = 0.0
 
@@ -370,8 +370,6 @@ class ControlLoop:
         if desired_heater != self.heater_on:
             self._heater_changed_at = nowm
         self.heater_on = desired_heater
-        for hch in self.cfg.heaters:
-            self.desired[hch.point()] = self.heater_on
 
         # --- Lüfter: Notnagel nur bei STILLSTAND (>fan_stall_h ohne Abfall) ---
         if floor is not None and h is not None:
@@ -383,13 +381,16 @@ class ControlLoop:
                 self.venting = False
         else:
             self.venting = False
-        if self.cfg.fans:
-            cycle = self.cfg.fan_cycle_min * 60
-            if time.monotonic() - self._fan_cycle_started >= cycle:
-                self.fan_active = (self.fan_active + 1) % len(self.cfg.fans)
-                self._fan_cycle_started = time.monotonic()
+
+        # --- Seiten IMMER abwechseln: gilt für Heizung UND Lüfter (links/rechts) ---
+        n = max(len(self.cfg.heaters), len(self.cfg.fans), 1)
+        if time.monotonic() - self._fan_cycle_started >= self.cfg.fan_cycle_min * 60:
+            self.active_side = (self.active_side + 1) % n
+            self._fan_cycle_started = time.monotonic()
+        for i, hch in enumerate(self.cfg.heaters):
+            self.desired[hch.point()] = self.heater_on and (i == self.active_side)
         for i, f in enumerate(self.cfg.fans):
-            self.desired[f.point()] = self.venting and (i == self.fan_active)
+            self.desired[f.point()] = self.venting and (i == self.active_side)
 
     def _current_humidity_target(self, phase) -> float | None:
         if phase.humidity_start is None:
@@ -475,7 +476,7 @@ class ControlLoop:
             "temp_high": self.cfg.temp_high,
             "heater_on": self.heater_on,
             "venting": self.venting,
-            "fan_active": self.fan_active,
+            "active_side": self.active_side,
             "resting": self.resting,
             "rest_recover_to": round(self.humidity_target + self.cfg.humidity_hysteresis, 1)
                 if (self.resting and self.humidity_target is not None) else None,

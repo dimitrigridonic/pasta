@@ -16,7 +16,7 @@ control:
   temp_high: 32          # Heizungen AUS oberhalb (°C)
   max_temp: 38           # harte Sicherheits-Abschaltung der Heizungen (°C)
   humidity_hysteresis: 3 # Schalt-Totband Lüfter (% rF)
-  fan_cycle_min: 10      # Lüfter wechseln links/rechts alle X Minuten
+  fan_cycle_min: 10      # Seite (Heizung+Lüfter) wechselt links/rechts alle X Min.
   min_temp_for_fan: 0    # Lüfter erst ab dieser Temp (0 = immer erlaubt)
   # Dynamische Ruhephase: erreicht die Feuchte die Ideallinie, wird ALLES aus-
   # geschaltet, bis sie sich wieder über die Linie (+ humidity_hysteresis) erholt
