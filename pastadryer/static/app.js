@@ -82,55 +82,65 @@ function renderSensors(s) {
 
 /* ---------- Trockner-Schema ---------- */
 // Sensor-Nummer -> Position [x,y] (Seitenansicht). Telai-Reihen y: 110..200.
-// unterstes Telaio (y200): S6 links, S4 mitte, S3 rechts · 3.-unterstes (y164): S2/S1/S5
-const DRYER_POS = { 6: [126, 200], 4: [240, 200], 3: [354, 200], 2: [126, 164], 1: [240, 164], 5: [354, 164] };
+// unterste Ebene (y315): S6 links · S4 mitte · S5 rechts | 3.-unterste (y265): S2 · S1 · S3
+const DRYER_POS = { 6: [230, 315], 4: [320, 315], 5: [410, 315], 2: [230, 265], 1: [320, 265], 3: [410, 265] };
 const sNum = (name) => { const m = String(name).match(/(\d+)/); return m ? +m[1] : null; };
 
 function renderDryer(s) {
   const box = $("dryer"); if (!box) return;
   const left = s.active_side === 0;
   $("dryer-side").textContent = `aktive Seite: ${left ? "◀ LINKS" : "RECHTS ▶"}`;
-  const heat = (i) => (s.heaters[i] && s.heaters[i].on) ? "#ff7a59" : "#3a2a26";
-  const fan = (i) => (s.fans[i] && s.fans[i].on) ? "#56b6e0" : "#243038";
-  const outline = (isLeft) => (left === isLeft) ? ' stroke="#f23882" stroke-width="2.5"' : ' stroke="#3a3a40" stroke-width="1"';
   const val = {}; s.sensors.forEach((se) => { const n = sNum(se.name); if (n) val[n] = se; });
 
+  // Telai als Regale (obere Hälfte)
   let telai = "";
-  [110, 128, 146, 164, 182, 200].forEach((y) => {
-    telai += `<line x1="100" y1="${y}" x2="380" y2="${y}" stroke="#3a3a40" stroke-width="2" stroke-dasharray="3 4"/>`;
+  [190, 215, 240, 265, 290, 315].forEach((y) => {
+    telai += `<rect x="175" y="${y - 2}" width="290" height="4" rx="2" fill="#2c2c34"/>`;
   });
+
+  // Sensor-Chips
   let sensors = "";
   for (const n in DRYER_POS) {
     const [x, y] = DRYER_POS[n], se = val[n];
     const t = se && se.temp != null ? `${se.temp.toFixed(1)}°` : "–";
     const h = se && se.hum != null ? `${Math.round(se.hum)}%` : "";
     sensors += `<g>
-      <circle cx="${x}" cy="${y}" r="5.5" fill="#f23882" stroke="#000"/>
-      <text x="${x}" y="${y - 9}" text-anchor="middle" class="dl-s">S${n}</text>
-      <text x="${x}" y="${y + 16}" text-anchor="middle" class="dl-v">${t} ${h}</text></g>`;
+      <rect x="${x - 37}" y="${y - 15}" width="74" height="30" rx="9" fill="#17171c" stroke="#34343e"/>
+      <circle cx="${x - 25}" cy="${y}" r="4.5" fill="#f23882"/>
+      <text x="${x - 14}" y="${y - 2}" class="dl-s" text-anchor="start">S${n}</text>
+      <text x="${x - 14}" y="${y + 10}" class="dl-v" text-anchor="start">${t} ${h}</text></g>`;
   }
-  // Zirkulations-Loop (marschierende Striche; Richtung kehrt mit der aktiven Seite)
-  const loop = `M 106 110 H 374 A 12 12 0 0 1 386 122 V 230 A 12 12 0 0 1 374 242 H 106 A 12 12 0 0 1 94 230 V 122 A 12 12 0 0 1 106 110 Z`;
 
-  box.innerHTML = `<svg viewBox="0 0 480 300" class="dryer-svg" xmlns="http://www.w3.org/2000/svg">
-    <!-- Windkanal -->
-    <rect x="64" y="56" width="352" height="32" rx="5" fill="#161619" stroke="#3a3a40"/>
-    <text x="240" y="76" text-anchor="middle" class="dl-c">Windkanal</text>
+  // Heizung+Lüfter-Modul (im Kanal), aktive Seite mit Ring + Glow
+  const mod = (cx, isLeft) => {
+    const hOn = s.heaters[isLeft ? 0 : 1] && s.heaters[isLeft ? 0 : 1].on;
+    const fOn = s.fans[isLeft ? 0 : 1] && s.fans[isLeft ? 0 : 1].on;
+    const ring = (left === isLeft)
+      ? `<rect x="${cx - 54}" y="55" width="108" height="50" rx="14" fill="none" stroke="#f23882" stroke-width="2.5"/>` : "";
+    const side = isLeft ? "L" : "R";
+    return `${ring}
+      <rect x="${cx - 48}" y="63" width="58" height="34" rx="9" fill="${hOn ? "#ff7a59" : "#382722"}"${hOn ? ' filter="url(#dglow)"' : ""}/>
+      <text x="${cx - 19}" y="84" text-anchor="middle" class="dl-m" fill="${hOn ? "#2a0f06" : "#8a7068"}">HEIZ ${side}</text>
+      <circle cx="${cx + 30}" cy="80" r="17" fill="${fOn ? "#56b6e0" : "#22303a"}"${fOn ? ' filter="url(#dglow)"' : ""}/>
+      <text x="${cx + 30}" y="84" text-anchor="middle" class="dl-m" fill="${fOn ? "#04121a" : "#5a6e78"}">FAN</text>`;
+  };
+
+  const duct = "M 130 240 V 104 Q 130 80 154 80 H 486 Q 510 80 510 104 V 240";
+  const loop = "M 152 96 H 488 Q 510 96 510 118 V 350 Q 510 372 488 372 H 152 Q 130 372 130 350 V 118 Q 130 96 152 96 Z";
+
+  box.innerHTML = `<svg viewBox="0 0 640 430" class="dryer-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="dglow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
     <!-- Kammer -->
-    <rect x="64" y="92" width="352" height="170" rx="6" fill="#0c0c0e" stroke="#26262b"/>
+    <rect x="70" y="150" width="500" height="250" rx="16" fill="#101014" stroke="#2a2a30" stroke-width="1.5"/>
     ${telai}
-    <text x="74" y="100" class="dl-c">Telai (6)</text>
-    <text x="74" y="256" class="dl-c">Leerraum</text>
-    <!-- Heizung/Lüfter links -->
-    <rect x="66" y="58" width="74" height="28" rx="4" fill="${heat(0)}"${outline(true)}/>
-    <rect x="66" y="58" width="36" height="28" rx="4" fill="${fan(0)}" opacity="0.85"/>
-    <text x="103" y="76" text-anchor="middle" class="dl-c">L</text>
-    <!-- Heizung/Lüfter rechts -->
-    <rect x="340" y="58" width="74" height="28" rx="4" fill="${heat(1)}"${outline(false)}/>
-    <rect x="378" y="58" width="36" height="28" rx="4" fill="${fan(1)}" opacity="0.85"/>
-    <text x="377" y="76" text-anchor="middle" class="dl-c">R</text>
-    <!-- Zirkulation -->
+    <!-- Windkanal: separater Tubus mit runden 90°-Bögen runter in den Kasten -->
+    <path d="${duct}" fill="none" stroke="#34343c" stroke-width="26" stroke-linecap="round"/>
+    <path d="${duct}" fill="none" stroke="#101014" stroke-width="15" stroke-linecap="round"/>
+    <!-- Luftzirkulation durch Kanal + Kammer -->
     <path d="${loop}" class="dryer-flow ${left ? "" : "rev"}"/>
+    ${mod(200, true)}
+    ${mod(440, false)}
     ${sensors}
   </svg>`;
 }
