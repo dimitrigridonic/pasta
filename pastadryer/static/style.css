@@ -109,8 +109,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .sensor .sname { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.3rem; display: flex; justify-content: space-between; align-items: center; }
 .sensor .edit { cursor: pointer; opacity: 0.5; }
 .sensor .edit:hover { opacity: 1; }
-.sensor .svals { font-weight: 700; font-variant-numeric: tabular-nums; }
-.sensor .svals .t { color: var(--hot); } .sensor .svals .h { color: var(--cool); margin-left: 0.5rem; }
+.sensor .svals { font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 0.4rem; }
+.sensor .svals .t { color: var(--hot); } .sensor .svals .h { color: var(--cool); }
+.sensor .svals .sbatt { margin-left: auto; font-size: 0.6rem; color: var(--muted); font-weight: 400; }
 
 /* ---- Chart ---- */
 #hist-canvas { width: 100%; height: clamp(180px, 26vw, 320px); background: var(--surface-2); border-radius: 0.7rem; display: block; }

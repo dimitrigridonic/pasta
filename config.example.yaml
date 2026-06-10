@@ -23,6 +23,12 @@ control:
   drop_tolerance_per_h: 1.5  # erlaubter Abfall ÜBER der Phasen-Rampe (%/h)
   rest_min: 120              # Dauer einer Ruhephase (Minuten)
   rate_window_min: 40        # Messfenster für die Abfall-Geschwindigkeit (Minuten)
+  # Heizung sitzt oben & braucht Zeit zum Wirken -> Mindest-Laufzeit/-Pause
+  heater_min_on: 5           # Heizung läuft min. so lange (Minuten)
+  heater_min_off: 5          # danach min. so lange Pause/beobachten (Minuten)
+  # Lüfter nur als Notnagel, wenn die Feuchte lange nicht fällt
+  fan_stall_h: 5             # ... so viele Stunden praktisch ohne Abfall
+  fan_stall_drop: 1.0        # ... weniger als so viele %-Punkte gefallen
 
 # Relais-Kanäle (identifiziert per Schalttest)
 heaters:

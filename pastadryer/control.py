@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 
 TYPE_TEMP = "00000011"
 TYPE_HUM = "00000010"
+TYPE_BATT = "00000068"
 
 
 def _short(uuid: str) -> str:
@@ -64,6 +65,7 @@ class ControlLoop:
 
         # Heizung/Lüfter-Status (für Anzeige)
         self.heater_on = False
+        self._heater_changed_at = 0.0  # für Mindest-Laufzeit/-Pause (Trägheit)
         self.fan_active = 0          # Index in cfg.fans (alternierende Seite)
         self.venting = False
         self._fan_cycle_started = 0.0
@@ -109,7 +111,7 @@ class ControlLoop:
         wanted = {s.aid for s in self.cfg.sensors}  # leer = alle
         for acc in data:
             aid = acc.get("aid")
-            temp_iid = hum_iid = None
+            temp_iid = hum_iid = batt_iid = None
             for svc in acc.get("services", []):
                 for ch in svc.get("characteristics", []):
                     s = _short(ch.get("type"))
@@ -117,14 +119,16 @@ class ControlLoop:
                         temp_iid = ch.get("iid")
                     elif s == TYPE_HUM:
                         hum_iid = ch.get("iid")
+                    elif s == TYPE_BATT:
+                        batt_iid = ch.get("iid")
             if temp_iid is None and hum_iid is None:
                 continue
             if wanted and aid not in wanted:
                 continue
             self.sensors[aid] = {
                 "name": names.get(aid, f"Sensor {aid}"),
-                "temp": None, "hum": None,
-                "temp_iid": temp_iid, "hum_iid": hum_iid,
+                "temp": None, "hum": None, "batt": None,
+                "temp_iid": temp_iid, "hum_iid": hum_iid, "batt_iid": batt_iid,
             }
         self._apply_saved_names()
         log.info("Sensoren erkannt: %s", sorted(self.sensors))
@@ -214,28 +218,25 @@ class ControlLoop:
     async def _read_sensors(self) -> None:
         points = []
         for aid, s in self.sensors.items():
-            if s["temp_iid"]:
-                points.append((aid, s["temp_iid"]))
-            if s["hum_iid"]:
-                points.append((aid, s["hum_iid"]))
+            for key in ("temp_iid", "hum_iid", "batt_iid"):
+                if s[key]:
+                    points.append((aid, s[key]))
         if not points:
             return
         try:
             vals = await self.hk.get_values(points)
             for aid, s in self.sensors.items():
-                if s["temp_iid"] and (aid, s["temp_iid"]) in vals:
-                    v = vals[(aid, s["temp_iid"])]
-                    if v is not None:
-                        s["temp"] = round(float(v), 1)
-                if s["hum_iid"] and (aid, s["hum_iid"]) in vals:
-                    v = vals[(aid, s["hum_iid"])]
-                    if v is not None:
-                        s["hum"] = round(float(v), 1)
+                for key, field in (("temp_iid", "temp"), ("hum_iid", "hum"), ("batt_iid", "batt")):
+                    if s[key] and (aid, s[key]) in vals:
+                        v = vals[(aid, s[key])]
+                        if v is not None:
+                            s[field] = round(float(v), 1) if field != "batt" else int(v)
             self._aggregate()
             if self.agg_hum is not None:
                 nowm = time.monotonic()
                 self._hum_hist.append((nowm, self.agg_hum))
-                cutoff = nowm - (self.cfg.rate_window_min * 60 + 120)
+                span = max(self.cfg.rate_window_min * 60, self.cfg.fan_stall_h * 3600)
+                cutoff = nowm - (span + 120)
                 while self._hum_hist and self._hum_hist[0][0] < cutoff:
                     self._hum_hist.popleft()
             self.last_reading_ok = True
@@ -263,20 +264,24 @@ class ControlLoop:
         self.agg_temp = agg(temps)
         self.agg_hum = agg(hums)
 
-    def _humidity_drop_rate(self) -> float | None:
-        """Feuchte-Abfall in %-Punkten/Stunde über das Messfenster (positiv = fallend)."""
+    def _drop_over(self, span_s: float):
+        """(Abfall %-Punkte, gemessene Zeitspanne s) über ~span_s; None wenn zu wenig Daten."""
         if len(self._hum_hist) < 2:
             return None
         now = time.monotonic()
-        window = self.cfg.rate_window_min * 60
-        oldest = next(((ts, hv) for ts, hv in self._hum_hist if now - ts <= window), None)
+        oldest = next(((ts, hv) for ts, hv in self._hum_hist if now - ts <= span_s), None)
         if oldest is None:
             return None
         newest_ts, newest_h = self._hum_hist[-1]
         dt = newest_ts - oldest[0]
-        if dt < window * 0.6:          # noch nicht genug Zeitspanne gemessen
+        if dt < span_s * 0.6:          # noch nicht genug Zeitspanne gemessen
             return None
-        return (oldest[1] - newest_h) / (dt / 3600)
+        return (oldest[1] - newest_h, dt)   # positiv = gefallen
+
+    def _humidity_drop_rate(self) -> float | None:
+        """Feuchte-Abfall in %-Punkten/Stunde über das Messfenster (positiv = fallend)."""
+        r = self._drop_over(self.cfg.rate_window_min * 60)
+        return None if r is None else r[0] / (r[1] / 3600)
 
     # ---- Regel-Logik -----------------------------------------------------
     def _decide(self) -> None:
@@ -326,24 +331,42 @@ class ControlLoop:
         # (geheizt/gelüftet) werden — sonst würden wir sie unters Minimum drücken.
         humidity_ok = floor is None or (h is not None and h > floor)
 
-        # --- Heizung: Band low..high, aber nur wenn Feuchte okay (Feuchte gewinnt) ---
-        if t is None or not humidity_ok:
-            self.heater_on = False
+        # --- Heizung: Band low..high, nur wenn Feuchte okay; mit Trägheit ---
+        # Die Heizung sitzt oben & braucht ~2-3 min zum Wirken: deshalb
+        # Mindest-Laufzeit (heater_min_on) und Mindest-Pause (heater_min_off).
+        nowm = time.monotonic()
+        force_off = (t is None) or (not humidity_ok)   # Feuchte am Minimum -> sofort aus
+        if force_off:
+            band_on = False
         elif t < low:
-            self.heater_on = True
+            band_on = True
         elif t > high:
-            self.heater_on = False
-        # dazwischen: Zustand halten
+            band_on = False
+        else:
+            band_on = self.heater_on            # im Band: Zustand halten
+        desired_heater = band_on
+        if not force_off:
+            elapsed = nowm - self._heater_changed_at
+            if self.heater_on and not desired_heater and elapsed < self.cfg.heater_min_on * 60:
+                desired_heater = True            # war zu kurz an -> weiterlaufen lassen
+            elif not self.heater_on and desired_heater and elapsed < self.cfg.heater_min_off * 60:
+                desired_heater = False           # Beobachtungspause -> noch nicht starten
+        if desired_heater != self.heater_on:
+            self._heater_changed_at = nowm
+        self.heater_on = desired_heater
         for hch in self.cfg.heaters:
             self.desired[hch.point()] = self.heater_on
 
-        # --- Lüfter: letzte Stufe. Nur wenn wir TROTZ Maximaltemperatur die
-        #     Feuchte nicht runterkriegen. Nie unter das Minimum lüften. ---
-        if floor is not None and h is not None and t is not None:
-            if t >= high and h > floor + hyst:
+        # --- Lüfter: Notnagel. Nur wenn die Feuchte über fan_stall_h STUNDEN
+        #     praktisch NICHT fällt (Stillstand) trotz Heizung. Nie unters Minimum. ---
+        if floor is not None and h is not None:
+            stall = self._drop_over(self.cfg.fan_stall_h * 3600)
+            stalled = stall is not None and stall[0] < self.cfg.fan_stall_drop
+            if stalled and h > floor + hyst:
                 self.venting = True
-            elif h <= floor or t < high:
+            elif h <= floor + hyst:
                 self.venting = False
+            # sonst: Zustand halten (läuft bis nahe Minimum)
         else:
             self.venting = False
 
@@ -453,7 +476,7 @@ class ControlLoop:
         return {
             "mode": self.mode,
             "sensors": [
-                {"aid": aid, "name": s["name"], "temp": s["temp"], "hum": s["hum"]}
+                {"aid": aid, "name": s["name"], "temp": s["temp"], "hum": s["hum"], "batt": s["batt"]}
                 for aid, s in sorted(self.sensors.items())
             ],
             "agg_temp": self.agg_temp,

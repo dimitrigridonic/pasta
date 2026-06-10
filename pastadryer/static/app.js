@@ -1,6 +1,25 @@
 const $ = (id) => document.getElementById(id);
 let state = null, view = null, phaseTotal = null;
-let histMetric = "hum", lastHist = null;
+let histMetric = "hum", lastHist = null, allPrograms = [];
+
+function progPhases(name) {
+  const p = allPrograms.find((x) => x.name === name);
+  return p ? p.phases : null;
+}
+function idealHumidityAt(t, started, phases) {
+  let el = t - started;
+  if (el < 0 || !phases) return null;
+  for (const ph of phases) {
+    const dur = (ph.duration_h || 0) * 3600;
+    if (ph.humidity_start == null) { el -= dur; continue; }
+    const end = ph.humidity_end != null ? ph.humidity_end : ph.humidity_start;
+    if (dur <= 0) return ph.humidity_start;
+    if (el <= dur) return ph.humidity_start + (end - ph.humidity_start) * (el / dur);
+    el -= dur;
+  }
+  const last = phases[phases.length - 1];
+  return last ? (last.humidity_end != null ? last.humidity_end : last.humidity_start) : null;
+}
 const PALETTE = ["#f23882", "#56b6e0", "#ff7a59", "#36d399", "#c678dd", "#e0b04c", "#7bd0c8", "#9aa0ff"];
 
 async function api(path, body, method) {
@@ -49,8 +68,9 @@ function renderSensors(s) {
   const box = $("sensors"); box.innerHTML = "";
   s.sensors.forEach((se) => {
     const d = document.createElement("div"); d.className = "sensor";
+    const batt = se.batt != null ? `<span class="sbatt">🔋${se.batt}%</span>` : "";
     d.innerHTML = `<div class="sname"><span>${se.name}</span><span class="edit">✎</span></div>
-      <div class="svals"><span class="t">${fmt(se.temp)}°</span><span class="h">${fmt(se.hum, 0)}%</span></div>`;
+      <div class="svals"><span class="t">${fmt(se.temp)}°</span><span class="h">${fmt(se.hum, 0)}%</span>${batt}</div>`;
     d.querySelector(".edit").onclick = async () => {
       const name = prompt(`Name für Sensor (aid ${se.aid}):`, se.name);
       if (name != null) render(await api("/api/sensor/name", { aid: se.aid, name }));
@@ -157,6 +177,14 @@ function drawChart() {
     if (p[0] < tmin) tmin = p[0]; if (p[0] > tmax) tmax = p[0];
     if (p[idx] != null) { if (p[idx] < vmin) vmin = p[idx]; if (p[idx] > vmax) vmax = p[idx]; }
   }));
+  // Ideallinie (nur bei Feuchte + laufendem Programm) ins Wertefenster einbeziehen
+  const idealPhases = histMetric === "hum" && state && state.program_started ? progPhases(state.program) : null;
+  if (idealPhases && isFinite(tmin)) {
+    [Math.max(tmin, state.program_started), tmax].forEach((tt) => {
+      const v = idealHumidityAt(tt, state.program_started, idealPhases);
+      if (v != null) { if (v < vmin) vmin = v; if (v > vmax) vmax = v; }
+    });
+  }
   ctx.font = "11px system-ui"; ctx.fillStyle = "#8b8b93";
   if (!isFinite(vmin)) { ctx.fillText("noch keine Daten – läuft mit, sobald geloggt wird", padL, H / 2); $("hist-legend").innerHTML = ""; return; }
   if (vmin === vmax) { vmin -= 1; vmax += 1; }
@@ -186,6 +214,23 @@ function drawChart() {
     sp.innerHTML = `<i style="background:${col}"></i>${names[a] || "Sensor " + a}`;
     leg.appendChild(sp);
   });
+  // Harte Ideallinie (weiss, gestrichelt)
+  if (idealPhases && isFinite(tmin)) {
+    const t0 = Math.max(tmin, state.program_started);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath();
+    let st = false;
+    for (let k = 0; k <= 80; k++) {
+      const tt = t0 + (tmax - t0) * k / 80;
+      const v = idealHumidityAt(tt, state.program_started, idealPhases);
+      if (v == null) continue;
+      const x = X(tt), y = Y(v);
+      st ? ctx.lineTo(x, y) : ctx.moveTo(x, y); st = true;
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    const sp = document.createElement("span");
+    sp.innerHTML = `<i style="background:#fff"></i>Ideallinie`;
+    leg.appendChild(sp);
+  }
 }
 async function loadHistory() {
   const h = $("hist-range").value;
@@ -243,9 +288,9 @@ function gather(phasesEl) {
 }
 function mkBtn(txt, cls, fn) { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = txt; b.onclick = fn; return b; }
 async function loadPrograms() {
-  const list = await api("/api/programs");
+  allPrograms = await api("/api/programs");
   const box = $("prog-editor"); box.innerHTML = "";
-  list.forEach((p) => box.appendChild(programBlock(p)));
+  allPrograms.forEach((p) => box.appendChild(programBlock(p)));
 }
 $("prog-new").onclick = () => {
   $("prog-editor").appendChild(programBlock({ name: "Neues Programm", phases: [{ name: "Phase 1", duration_h: 10, humidity_start: 80, humidity_end: 70 }] }));
