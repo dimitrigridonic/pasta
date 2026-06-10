@@ -89,7 +89,8 @@ const sNum = (name) => { const m = String(name).match(/(\d+)/); return m ? +m[1]
 function renderDryer(s) {
   const box = $("dryer"); if (!box) return;
   const left = s.active_side === 0;
-  $("dryer-side").textContent = `aktive Seite: ${left ? "◀ LINKS" : "RECHTS ▶"}`;
+  const windOn = !!(s.heater_on || s.venting);   // Wind nur wenn wirklich was läuft
+  $("dryer-side").textContent = windOn ? `Wind ${left ? "◀ nach LINKS" : "nach RECHTS ▶"}` : "kein Wind";
   const val = {}; s.sensors.forEach((se) => { const n = sNum(se.name); if (n) val[n] = se; });
 
   // Telai als Regale (obere Hälfte)
@@ -137,8 +138,8 @@ function renderDryer(s) {
     <!-- Windkanal: separater Tubus mit runden 90°-Bögen runter in den Kasten -->
     <path d="${duct}" fill="none" stroke="#34343c" stroke-width="26" stroke-linecap="round"/>
     <path d="${duct}" fill="none" stroke="#101014" stroke-width="15" stroke-linecap="round"/>
-    <!-- Luftzirkulation durch Kanal + Kammer -->
-    <path d="${loop}" class="dryer-flow ${left ? "" : "rev"}"/>
+    <!-- Luftzirkulation: nur wenn Wind läuft; linke Seite -> nach links (rev) -->
+    ${windOn ? `<path d="${loop}" class="dryer-flow ${left ? "rev" : ""}"/>` : ""}
     ${mod(200, true)}
     ${mod(440, false)}
     ${sensors}
