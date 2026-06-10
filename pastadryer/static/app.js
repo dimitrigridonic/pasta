@@ -88,9 +88,12 @@ const sNum = (name) => { const m = String(name).match(/(\d+)/); return m ? +m[1]
 
 function renderDryer(s) {
   const box = $("dryer"); if (!box) return;
-  const left = s.active_side === 0;
-  const windOn = !!(s.heater_on || s.venting);   // Wind nur wenn wirklich was läuft
-  $("dryer-side").textContent = windOn ? `Wind ${left ? "◀ nach LINKS" : "nach RECHTS ▶"}` : "kein Wind";
+  // Welche Seite bläst tatsächlich? (gilt für Manuell UND Programm)
+  const leftBlow = !!((s.heaters[0] && s.heaters[0].on) || (s.fans[0] && s.fans[0].on));
+  const rightBlow = !!((s.heaters[1] && s.heaters[1].on) || (s.fans[1] && s.fans[1].on));
+  const windOn = leftBlow || rightBlow;
+  const windLeft = leftBlow && !rightBlow ? true : (rightBlow && !leftBlow ? false : s.active_side === 0);
+  $("dryer-side").textContent = windOn ? `Wind ${windLeft ? "◀ nach LINKS" : "nach RECHTS ▶"}` : "kein Wind";
   const val = {}; s.sensors.forEach((se) => { const n = sNum(se.name); if (n) val[n] = se; });
 
   // Telai als Regale (obere Hälfte)
@@ -116,7 +119,7 @@ function renderDryer(s) {
   const mod = (cx, isLeft) => {
     const hOn = s.heaters[isLeft ? 0 : 1] && s.heaters[isLeft ? 0 : 1].on;
     const fOn = s.fans[isLeft ? 0 : 1] && s.fans[isLeft ? 0 : 1].on;
-    const ring = (windOn && left === isLeft)
+    const ring = ((isLeft && leftBlow) || (!isLeft && rightBlow))
       ? `<rect x="${cx - 54}" y="55" width="108" height="50" rx="14" fill="none" stroke="#f23882" stroke-width="2.5"/>` : "";
     const side = isLeft ? "L" : "R";
     return `${ring}
@@ -139,7 +142,7 @@ function renderDryer(s) {
     <path d="${duct}" fill="none" stroke="#34343c" stroke-width="26" stroke-linecap="round"/>
     <path d="${duct}" fill="none" stroke="#101014" stroke-width="15" stroke-linecap="round"/>
     <!-- Luftzirkulation: nur wenn Wind läuft; linke Seite -> nach links (rev) -->
-    ${windOn ? `<path d="${loop}" class="dryer-flow ${left ? "rev" : ""}"/>` : ""}
+    ${windOn ? `<path d="${loop}" class="dryer-flow ${windLeft ? "rev" : ""}"/>` : ""}
     ${mod(200, true)}
     ${mod(440, false)}
     ${sensors}
@@ -165,8 +168,10 @@ function render(s) {
   [...s.heaters, ...s.fans].forEach((ch, i) => {
     const pill = $(`pill-${ch.aid}-${ch.iid}`); if (!pill) return;
     pill.classList.toggle("on", !!ch.on);
+    const lb = !!((s.heaters[0] && s.heaters[0].on) || (s.fans[0] && s.fans[0].on));
+    const rb = !!((s.heaters[1] && s.heaters[1].on) || (s.fans[1] && s.fans[1].on));
     const sideIdx = i < s.heaters.length ? i : i - s.heaters.length;
-    pill.classList.toggle("active", sideIdx === s.active_side);
+    pill.classList.toggle("active", sideIdx === 0 ? lb : rb);
   });
   let bandTxt = `Feuchte folgt Ideallinie · Heizung ${s.temp_low}–${s.temp_high}°C · Lüfter = Notnagel`;
   if (s.drop_rate != null) bandTxt += ` · Abfall ${s.drop_rate}%/h`;
