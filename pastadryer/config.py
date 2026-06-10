@@ -87,6 +87,7 @@ class Config:
     heater_min_off: float     # Mindest-Pause Heizung (Minuten) – beobachten
     fan_stall_h: float        # Lüfter erst, wenn Feuchte so lange (h) nicht fällt
     fan_stall_drop: float     # … und in dieser Zeit weniger als X %-Punkte gefallen ist
+    heater_max_on: float      # SICHERHEIT: Heizung-Dauerlauf > X min -> Not-Aus + verriegeln
     # Geräte
     heaters: list[Channel]
     fans: list[Channel]
@@ -128,6 +129,7 @@ class Config:
             heater_min_off=float(c.get("heater_min_off", 5)),
             fan_stall_h=float(c.get("fan_stall_h", 5)),
             fan_stall_drop=float(c.get("fan_stall_drop", 1.0)),
+            heater_max_on=float(c.get("heater_max_on", 6)),
             heaters=[Channel.parse(x) for x in raw.get("heaters", [])],
             fans=[Channel.parse(x) for x in raw.get("fans", [])],
             sensors=[SensorCfg.parse(x) for x in raw.get("sensors", [])],

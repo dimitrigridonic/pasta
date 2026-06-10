@@ -96,6 +96,11 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         loop.skip_phase()
         return loop.state()
 
+    @app.api_route("/api/fault/clear", methods=["GET", "POST"])
+    async def fault_clear():
+        loop.clear_fault()
+        return loop.state()
+
     # --- Programm-Editor ---
     @app.get("/api/programs")
     async def programs_list():

@@ -54,6 +54,10 @@ body {
 .conn.stale { color: var(--danger); }
 
 .banner { background: var(--accent); color: #fff; padding: 0.7rem 1rem; border-radius: var(--r); margin-bottom: var(--gap); font-size: 0.85rem; }
+.fault { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; background: #2a0a12; border: 1.5px solid var(--danger); color: #ffd9e6; padding: 0.9rem 1.1rem; border-radius: var(--r); margin-bottom: var(--gap); font-weight: 600; }
+.fault #fault-text { flex: 1; min-width: 200px; }
+.fault .btn { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 700; flex: none; }
+.cp-empty { color: var(--muted); font-size: 0.9rem; }
 .hidden { display: none !important; }
 
 /* ---- Dashboard-Grid ---- */

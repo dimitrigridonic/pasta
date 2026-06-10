@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
-  <link rel="stylesheet" href="/static/style.css?v=14" />
+  <link rel="stylesheet" href="/static/style.css?v=15" />
 </head>
 <body>
   <header class="topbar">
@@ -19,6 +19,10 @@
     </div>
   </header>
 
+  <div id="fault" class="fault hidden">
+    <span id="fault-text"></span>
+    <button id="fault-reset" class="btn">Quittieren &amp; entriegeln</button>
+  </div>
   <div id="banner" class="banner hidden"></div>
 
   <main class="dash">
@@ -42,19 +46,21 @@
           <button id="program-stop" class="btn hidden">Stopp</button>
         </div>
         <div id="program-status" class="prog-status hidden">
-          <div class="prog-name" id="prog-name"></div>
-          <div class="prog-phase" id="prog-phase"></div>
-          <div class="prog-bar"><div id="prog-bar-fill"></div></div>
           <button id="program-skip" class="btn ghost">Phase überspringen ⏭</button>
         </div>
       </div>
     </section>
 
-    <!-- Status / Stellglieder -->
+    <!-- Aktuelles Programm -->
     <section class="card">
-      <h2>Stellglieder</h2>
-      <div class="actuators" id="actuators"></div>
-      <div class="band" id="band"></div>
+      <h2>Aktuelles Programm</h2>
+      <div id="prog-running" class="hidden">
+        <div class="prog-name" id="prog-name"></div>
+        <div class="prog-phase" id="prog-phase"></div>
+        <div class="prog-bar"><div id="prog-bar-fill"></div></div>
+        <div class="band" id="band"></div>
+      </div>
+      <div id="prog-empty" class="cp-empty">Kein Programm aktiv – im <b>Steuerung</b>-Tab wählen und starten.</div>
     </section>
 
     <!-- Trockner-Schema -->
@@ -102,6 +108,6 @@
   </main>
 
   <footer id="foot"></footer>
-  <script src="/static/app.js?v=14"></script>
+  <script src="/static/app.js?v=15"></script>
 </body>
 </html>

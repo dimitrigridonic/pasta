@@ -164,15 +164,6 @@ function render(s) {
     badge.className = "badge " + (s.mode === "program" ? "program" : s.mode === "manual" ? "manual" : "");
   }
 
-  buildActuators(s);
-  [...s.heaters, ...s.fans].forEach((ch, i) => {
-    const pill = $(`pill-${ch.aid}-${ch.iid}`); if (!pill) return;
-    pill.classList.toggle("on", !!ch.on);
-    const lb = !!((s.heaters[0] && s.heaters[0].on) || (s.fans[0] && s.fans[0].on));
-    const rb = !!((s.heaters[1] && s.heaters[1].on) || (s.fans[1] && s.fans[1].on));
-    const sideIdx = i < s.heaters.length ? i : i - s.heaters.length;
-    pill.classList.toggle("active", sideIdx === 0 ? lb : rb);
-  });
   let bandTxt = `Feuchte folgt Ideallinie · Heizung ${s.temp_low}–${s.temp_high}°C · Lüfter = Notnagel`;
   if (s.drop_rate != null) bandTxt += ` · Abfall ${s.drop_rate}%/h`;
   if (s.resting) bandTxt += ` · 💤 Ruhe bis ≥${s.rest_recover_to}%`;
@@ -194,6 +185,8 @@ function render(s) {
   $("program-start").classList.toggle("hidden", running);
   $("program-stop").classList.toggle("hidden", !running);
   $("program-status").classList.toggle("hidden", !running);
+  $("prog-running").classList.toggle("hidden", !running);
+  $("prog-empty").classList.toggle("hidden", running);
   if (running) {
     $("prog-name").textContent = s.program;
     const ph = s.phase;
@@ -211,6 +204,12 @@ function render(s) {
 
   renderSensors(s);
   renderDryer(s);
+
+  const fault = $("fault");
+  if (s.fault) {
+    $("fault-text").textContent = `🚨 NOT-AUS verriegelt: ${s.fault_reason || "Heizung lief zu lange"}. Programm gestoppt – schaltet nicht von selbst wieder ein.`;
+    fault.classList.remove("hidden");
+  } else fault.classList.add("hidden");
 
   const banner = $("banner");
   if (s.safety_tripped) { banner.textContent = `⚠️ Sicherheitsabschaltung: ≥ ${s.max_temp}°C – Heizungen aus`; banner.classList.remove("hidden"); }
@@ -233,6 +232,7 @@ document.querySelectorAll(".mode").forEach((b) =>
 $("program-start").onclick = async () => { phaseTotal = null; render(await api("/api/program/start", { name: $("program-select").value })); };
 $("program-stop").onclick = async () => render(await api("/api/program/stop", null, "POST"));
 $("program-skip").onclick = async () => { phaseTotal = null; render(await api("/api/program/skip", null, "POST")); };
+$("fault-reset").onclick = async () => render(await api("/api/fault/clear", null, "POST"));
 
 /* ---------- Chart ---------- */
 function drawChart() {

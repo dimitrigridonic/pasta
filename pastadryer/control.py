@@ -80,6 +80,11 @@ class ControlLoop:
         self.last_error: str | None = None
         self._last_log = 0.0
 
+        # SICHERHEIT: verriegelnder Not-Aus (Heizung-Dauerlauf)
+        self.fault = False
+        self.fault_reason: str | None = None
+        self._heater_on_since: dict = {}   # point -> monotonic (seit wann an)
+
         # Ruhephasen / Abfall-Wächter
         self._hum_hist: deque = deque()      # (monotonic, agg_hum)
         self.resting = False
@@ -173,12 +178,31 @@ class ControlLoop:
         self._kick()
 
     def set_manual(self, aid: int, iid: int, value: bool) -> None:
+        if self.fault:
+            return   # verriegelt: erst quittieren
         self.mode = "manual"
         self.program = None
         self.manual[(aid, iid)] = value
         self._kick()
 
+    def _trip_fault(self, reason: str) -> None:
+        if not self.fault:
+            log.critical("NOT-AUS verriegelt: %s", reason)
+        self.fault = True
+        self.fault_reason = reason
+
+    def clear_fault(self) -> None:
+        self.fault = False
+        self.fault_reason = None
+        self._heater_on_since.clear()
+        for k in self.manual:
+            self.manual[k] = False
+        log.info("Not-Aus quittiert (zurückgesetzt)")
+        self._kick()
+
     def start_program(self, name: str) -> bool:
+        if self.fault:
+            return False   # verriegelt: erst quittieren
         prog = self.store.get(name)
         if prog is None:
             return False
@@ -301,13 +325,34 @@ class ControlLoop:
         elif self.mode == "program":
             self._decide_program()
 
-        # Sicherheit: zu heiss -> Heizungen hart aus (in jedem Modus)
+        # Sicherheit 1: zu heiss -> Heizungen hart aus (in jedem Modus)
         self.safety_tripped = False
         if self.max_temp_seen is not None and self.max_temp_seen >= self.cfg.max_temp:
             self.safety_tripped = True
             self.heater_on = False
             for h in self.cfg.heaters:
                 self.desired[h.point()] = False
+
+        # Sicherheit 2: Heizung-Dauerlauf-Wächter (VERRIEGELND) — läuft eine Heizung
+        # länger als heater_max_on am Stück, ist etwas defekt -> Not-Aus, bleibt aus.
+        nowm = time.monotonic()
+        for hch in self.cfg.heaters:
+            p = hch.point()
+            if self.desired.get(p):
+                self._heater_on_since.setdefault(p, nowm)
+                if nowm - self._heater_on_since[p] > self.cfg.heater_max_on * 60:
+                    self._trip_fault(f"{hch.name} lief länger als {self.cfg.heater_max_on:.0f} min am Stück")
+            else:
+                self._heater_on_since.pop(p, None)
+
+        if self.fault:   # verriegelt: alles aus, Programm gestoppt, bleibt aus
+            self.mode = "off"
+            self.program = None
+            self.heater_on = False
+            self.venting = False
+            self._heater_on_since.clear()
+            for ch in self.cfg.heaters + self.cfg.fans:
+                self.desired[ch.point()] = False
 
     def _decide_program(self) -> None:
         if not self.program:
@@ -488,7 +533,10 @@ class ControlLoop:
             "reading_ok": self.last_reading_ok,
             "reading_age": (time.time() - self.last_reading_at) if self.last_reading_at else None,
             "safety_tripped": self.safety_tripped,
+            "fault": self.fault,
+            "fault_reason": self.fault_reason,
             "max_temp": self.cfg.max_temp,
+            "heater_max_on": self.cfg.heater_max_on,
             "program": self.program.name if self.program else None,
             "phase": phase,
             "phase_remaining": phase_remaining,
