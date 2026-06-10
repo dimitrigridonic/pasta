@@ -116,7 +116,7 @@ function renderDryer(s) {
   const mod = (cx, isLeft) => {
     const hOn = s.heaters[isLeft ? 0 : 1] && s.heaters[isLeft ? 0 : 1].on;
     const fOn = s.fans[isLeft ? 0 : 1] && s.fans[isLeft ? 0 : 1].on;
-    const ring = (left === isLeft)
+    const ring = (windOn && left === isLeft)
       ? `<rect x="${cx - 54}" y="55" width="108" height="50" rx="14" fill="none" stroke="#f23882" stroke-width="2.5"/>` : "";
     const side = isLeft ? "L" : "R";
     return `${ring}
