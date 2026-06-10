@@ -128,12 +128,12 @@ function render(s) {
 document.querySelectorAll(".mode").forEach((b) =>
   b.addEventListener("click", async () => {
     view = b.dataset.mode; applyView();
-    if (view === "off") render(await api("/api/off"));
+    if (view === "off") render(await api("/api/off", null, "POST"));
   })
 );
 $("program-start").onclick = async () => { phaseTotal = null; render(await api("/api/program/start", { name: $("program-select").value })); };
-$("program-stop").onclick = async () => render(await api("/api/program/stop"));
-$("program-skip").onclick = async () => { phaseTotal = null; render(await api("/api/program/skip")); };
+$("program-stop").onclick = async () => render(await api("/api/program/stop", null, "POST"));
+$("program-skip").onclick = async () => { phaseTotal = null; render(await api("/api/program/skip", null, "POST")); };
 
 /* ---------- Chart ---------- */
 function drawChart() {
