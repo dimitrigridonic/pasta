@@ -1,0 +1,14 @@
+# Secrets / Laufzeit (NICHT committen)
+pairing.json
+charmap.json
+history.db
+monitor.log
+config.yaml
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store

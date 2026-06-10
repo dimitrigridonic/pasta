@@ -1,0 +1,17 @@
+[Unit]
+Description=Pasta-Trockner Steuerung (FastAPI + HomeKit)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dimitri
+WorkingDirectory=/home/dimitri/pasta
+Environment=PYTHONUTF8=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/dimitri/pasta/.venv/bin/python /home/dimitri/pasta/run.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

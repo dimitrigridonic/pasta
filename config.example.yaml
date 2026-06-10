@@ -1,0 +1,55 @@
+# Kopiere nach config.yaml und passe an. aid/iid kommen aus:
+#   python -m pastadryer.cli dump
+
+homekit:
+  pairing_file: pairing.json
+  alias: pastadryer
+
+web:
+  host: 0.0.0.0      # vom Handy im WLAN erreichbar
+  port: 8000
+
+control:
+  poll_interval: 15      # Sekunden zwischen Messungen
+  aggregate: average     # average | max | min  — wie aus den Sensoren EIN Regelwert wird
+  temp_low: 30           # Heizungen AN unterhalb (°C)
+  temp_high: 32          # Heizungen AUS oberhalb (°C)
+  max_temp: 38           # harte Sicherheits-Abschaltung der Heizungen (°C)
+  humidity_hysteresis: 3 # Schalt-Totband Lüfter (% rF)
+  fan_cycle_min: 10      # Lüfter wechseln links/rechts alle X Minuten
+  min_temp_for_fan: 0    # Lüfter erst ab dieser Temp (0 = immer erlaubt)
+
+# Relais-Kanäle (identifiziert per Schalttest)
+heaters:
+  - { name: "Heizung links",  aid: 72, iid: 262147 }
+  - { name: "Heizung rechts", aid: 71, iid: 262147 }
+fans:
+  - { name: "Lüfter links",   aid: 72, iid: 327683 }
+  - { name: "Lüfter rechts",  aid: 71, iid: 327683 }
+
+# Sensoren: leer = ALLE Temp/Feuchte-Sensoren automatisch.
+# Sobald die Telai-Zuordnung steht, hier benennen:
+sensors: []
+#  - { name: "Telaio 1", aid: 33 }
+#  - { name: "Telaio 2", aid: 66 }
+#  - { name: "Telaio 5", aid: 73 }
+
+logging:
+  enabled: true
+  file: history.db       # SQLite-Verlauf (für Auswertung nach dem Lauf)
+  interval: 60           # Sekunden zwischen History-Punkten
+
+# Trocken-Programme. Heizung hält temp_low..temp_high; Lüfter regeln auf die
+# Feuchte-Rampe (humidity_start -> humidity_end über die Phasendauer).
+programs:
+  - name: "Pasta-Kurve (60h)"
+    phases:
+      - { name: "Phase 1 · 80% halten", duration_h: 20, humidity_start: 80, humidity_end: 80 }
+      - { name: "Phase 2 · 80→70%",     duration_h: 20, humidity_start: 80, humidity_end: 70 }
+      - { name: "Phase 3 · 70→60%",     duration_h: 20, humidity_start: 70, humidity_end: 60 }
+
+  - name: "Test (schnell, 6 min)"
+    phases:
+      - { name: "Test 80%", duration_h: 0.0333, humidity_start: 80, humidity_end: 80 }
+      - { name: "Test 70%", duration_h: 0.0333, humidity_start: 80, humidity_end: 70 }
+      - { name: "Test 60%", duration_h: 0.0333, humidity_start: 70, humidity_end: 60 }

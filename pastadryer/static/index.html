@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Pasta-Trockner</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main>
+    <h1>🍝 Pasta-Trockner</h1>
+    <div id="banner" class="banner hidden"></div>
+
+    <!-- Aggregierte Werte + aktuelles Ziel -->
+    <section class="readings">
+      <div class="gauge">
+        <div class="value" id="temp">–</div><div class="unit">°C</div>
+        <div class="label">Temperatur <span id="temp-band" class="sub"></span></div>
+      </div>
+      <div class="gauge">
+        <div class="value" id="hum">–</div><div class="unit">% rF</div>
+        <div class="label">Feuchte <span id="hum-target" class="sub"></span></div>
+      </div>
+    </section>
+
+    <!-- Stellglieder -->
+    <section class="actuators" id="actuators"></section>
+
+    <!-- Modus -->
+    <section class="card">
+      <h2>Modus</h2>
+      <div class="modes">
+        <button data-mode="off" class="mode">Aus</button>
+        <button data-mode="manual" class="mode">Manuell</button>
+        <button data-mode="program" class="mode">Programm</button>
+      </div>
+    </section>
+
+    <!-- Manuell -->
+    <section class="card hidden" id="manual-card">
+      <h2>Manuell schalten</h2>
+      <div class="toggles" id="manual-toggles"></div>
+    </section>
+
+    <!-- Programm -->
+    <section class="card hidden" id="program-card">
+      <h2>Trocken-Programm</h2>
+      <select id="program-select"></select>
+      <div class="row">
+        <button id="program-start" class="primary">Start</button>
+        <button id="program-stop" class="ghost hidden">Stopp</button>
+      </div>
+      <div id="program-status" class="prog-status hidden">
+        <div class="prog-name" id="prog-name"></div>
+        <div class="prog-phase" id="prog-phase"></div>
+        <div class="prog-bar"><div id="prog-bar-fill"></div></div>
+        <button id="program-skip" class="ghost">Phase überspringen ⏭</button>
+      </div>
+    </section>
+
+    <!-- Sensoren -->
+    <section class="card">
+      <h2>Sensoren <span id="agg-note" class="sub"></span></h2>
+      <div class="sensors" id="sensors"></div>
+    </section>
+
+    <!-- Verlauf -->
+    <section class="card">
+      <h2>Verlauf</h2>
+      <div class="row">
+        <select id="hist-range">
+          <option value="1">1 h</option>
+          <option value="6">6 h</option>
+          <option value="24">24 h</option>
+          <option value="72" selected>72 h</option>
+        </select>
+        <button id="hist-metric" class="ghost">Feuchte</button>
+        <button id="hist-refresh" class="ghost">↻</button>
+      </div>
+      <canvas id="hist-canvas" width="640" height="240"></canvas>
+      <div class="row">
+        <a id="hist-csv" class="ghost" href="/api/history.csv?hours=72" download>CSV exportieren</a>
+        <button id="hist-clear" class="ghost danger">Verlauf löschen</button>
+      </div>
+      <div id="hist-legend" class="legend"></div>
+    </section>
+
+    <footer id="foot">verbinde…</footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
