@@ -39,14 +39,21 @@ logging:
   file: history.db       # SQLite-Verlauf (für Auswertung nach dem Lauf)
   interval: 60           # Sekunden zwischen History-Punkten
 
-# Trocken-Programme. Heizung hält temp_low..temp_high; Lüfter regeln auf die
-# Feuchte-Rampe (humidity_start -> humidity_end über die Phasendauer).
+# Trocken-Programme (Seed; im Browser editierbar -> programs.json).
+# Heizung hält temp_low..temp_high; Lüfter regeln auf die Feuchte-Rampe
+# (humidity_start -> humidity_end über die Phasendauer). Zahlen wie 20-20-15 = h.
 programs:
-  - name: "Pasta-Kurve (60h)"
+  - name: "Maccheroni (20-20-15)"
     phases:
-      - { name: "Phase 1 · 80% halten", duration_h: 20, humidity_start: 80, humidity_end: 80 }
-      - { name: "Phase 2 · 80→70%",     duration_h: 20, humidity_start: 80, humidity_end: 70 }
-      - { name: "Phase 3 · 70→60%",     duration_h: 20, humidity_start: 70, humidity_end: 60 }
+      - { name: "80% halten", duration_h: 20, humidity_start: 80, humidity_end: 80 }
+      - { name: "80→70%",     duration_h: 20, humidity_start: 80, humidity_end: 70 }
+      - { name: "70→60%",     duration_h: 15, humidity_start: 70, humidity_end: 60 }
+
+  - name: "Caserecce (10-10-5)"
+    phases:
+      - { name: "80% halten", duration_h: 10, humidity_start: 80, humidity_end: 80 }
+      - { name: "80→70%",     duration_h: 10, humidity_start: 80, humidity_end: 70 }
+      - { name: "70→60%",     duration_h: 5,  humidity_start: 70, humidity_end: 60 }
 
   - name: "Test (schnell, 6 min)"
     phases:

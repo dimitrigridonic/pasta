@@ -4,6 +4,8 @@ charmap.json
 history.db
 monitor.log
 config.yaml
+programs.json
+sensor_names.json
 
 # Python
 .venv/

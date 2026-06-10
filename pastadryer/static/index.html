@@ -2,91 +2,97 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <main>
-    <h1>🍝 Pasta-Trockner</h1>
-    <div id="banner" class="banner hidden"></div>
+  <header class="topbar">
+    <div class="brand">🍝 <span>Pasta-Trockner</span></div>
+    <div class="kpis">
+      <div class="kpi t"><b id="temp">–</b><small>°C ⌀</small></div>
+      <div class="kpi h"><b id="hum">–</b><small>% rF ⌀</small></div>
+    </div>
+    <div class="meta">
+      <span id="mode-badge" class="badge">–</span>
+      <span id="conn" class="conn">verbinde…</span>
+    </div>
+  </header>
 
-    <!-- Aggregierte Werte + aktuelles Ziel -->
-    <section class="readings">
-      <div class="gauge">
-        <div class="value" id="temp">–</div><div class="unit">°C</div>
-        <div class="label">Temperatur <span id="temp-band" class="sub"></span></div>
-      </div>
-      <div class="gauge">
-        <div class="value" id="hum">–</div><div class="unit">% rF</div>
-        <div class="label">Feuchte <span id="hum-target" class="sub"></span></div>
-      </div>
-    </section>
+  <div id="banner" class="banner hidden"></div>
 
-    <!-- Stellglieder -->
-    <section class="actuators" id="actuators"></section>
-
-    <!-- Modus -->
+  <main class="dash">
+    <!-- Steuerung -->
     <section class="card">
-      <h2>Modus</h2>
+      <h2>Steuerung</h2>
       <div class="modes">
         <button data-mode="off" class="mode">Aus</button>
         <button data-mode="manual" class="mode">Manuell</button>
         <button data-mode="program" class="mode">Programm</button>
       </div>
-    </section>
 
-    <!-- Manuell -->
-    <section class="card hidden" id="manual-card">
-      <h2>Manuell schalten</h2>
-      <div class="toggles" id="manual-toggles"></div>
-    </section>
-
-    <!-- Programm -->
-    <section class="card hidden" id="program-card">
-      <h2>Trocken-Programm</h2>
-      <select id="program-select"></select>
-      <div class="row">
-        <button id="program-start" class="primary">Start</button>
-        <button id="program-stop" class="ghost hidden">Stopp</button>
+      <div id="manual-card" class="hidden sub-block">
+        <div class="toggles" id="manual-toggles"></div>
       </div>
-      <div id="program-status" class="prog-status hidden">
-        <div class="prog-name" id="prog-name"></div>
-        <div class="prog-phase" id="prog-phase"></div>
-        <div class="prog-bar"><div id="prog-bar-fill"></div></div>
-        <button id="program-skip" class="ghost">Phase überspringen ⏭</button>
+
+      <div id="program-card" class="hidden sub-block">
+        <select id="program-select"></select>
+        <div class="row">
+          <button id="program-start" class="btn primary">Start</button>
+          <button id="program-stop" class="btn hidden">Stopp</button>
+        </div>
+        <div id="program-status" class="prog-status hidden">
+          <div class="prog-name" id="prog-name"></div>
+          <div class="prog-phase" id="prog-phase"></div>
+          <div class="prog-bar"><div id="prog-bar-fill"></div></div>
+          <button id="program-skip" class="btn ghost">Phase überspringen ⏭</button>
+        </div>
       </div>
     </section>
 
-    <!-- Sensoren -->
+    <!-- Status / Stellglieder -->
     <section class="card">
-      <h2>Sensoren <span id="agg-note" class="sub"></span></h2>
-      <div class="sensors" id="sensors"></div>
+      <h2>Stellglieder</h2>
+      <div class="actuators" id="actuators"></div>
+      <div class="band" id="band"></div>
     </section>
 
     <!-- Verlauf -->
-    <section class="card">
-      <h2>Verlauf</h2>
-      <div class="row">
-        <select id="hist-range">
-          <option value="1">1 h</option>
-          <option value="6">6 h</option>
-          <option value="24">24 h</option>
-          <option value="72" selected>72 h</option>
-        </select>
-        <button id="hist-metric" class="ghost">Feuchte</button>
-        <button id="hist-refresh" class="ghost">↻</button>
+    <section class="card span-all">
+      <div class="card-head">
+        <h2>Verlauf <small id="hist-stat"></small></h2>
+        <div class="chart-controls">
+          <select id="hist-range">
+            <option value="1">1 h</option><option value="6">6 h</option>
+            <option value="24">24 h</option><option value="72" selected>72 h</option>
+          </select>
+          <button id="hist-metric" class="btn ghost sm">Feuchte</button>
+          <button id="hist-refresh" class="btn ghost sm">↻</button>
+          <a id="hist-csv" class="btn ghost sm" href="/api/history.csv?hours=72" download>CSV</a>
+          <button id="hist-clear" class="btn ghost sm danger">Löschen</button>
+        </div>
       </div>
-      <canvas id="hist-canvas" width="640" height="240"></canvas>
-      <div class="row">
-        <a id="hist-csv" class="ghost" href="/api/history.csv?hours=72" download>CSV exportieren</a>
-        <button id="hist-clear" class="ghost danger">Verlauf löschen</button>
-      </div>
+      <canvas id="hist-canvas"></canvas>
       <div id="hist-legend" class="legend"></div>
     </section>
 
-    <footer id="foot">verbinde…</footer>
+    <!-- Sensoren -->
+    <section class="card span-all">
+      <h2>Sensoren <small id="agg-note"></small></h2>
+      <div class="sensors" id="sensors"></div>
+    </section>
+
+    <!-- Programm-Editor -->
+    <section class="card span-all">
+      <div class="card-head">
+        <h2>Programme bearbeiten</h2>
+        <button id="prog-new" class="btn ghost sm">+ Neues Programm</button>
+      </div>
+      <div id="prog-editor"></div>
+    </section>
   </main>
+
+  <footer id="foot"></footer>
   <script src="/static/app.js"></script>
 </body>
 </html>

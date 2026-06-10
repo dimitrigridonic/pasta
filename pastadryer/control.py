@@ -12,12 +12,15 @@ Modi: off | manual | program
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import time
 
-from .config import Config, Program
+from .config import Config
 from .history import History
 from .hk import HomeKit
+from .programs import ProgramStore
 
 log = logging.getLogger(__name__)
 
@@ -30,10 +33,13 @@ def _short(uuid: str) -> str:
 
 
 class ControlLoop:
-    def __init__(self, hk: HomeKit, cfg: Config, history: History):
+    def __init__(self, hk: HomeKit, cfg: Config, history: History,
+                 store: ProgramStore, names_path: str = "sensor_names.json"):
         self.hk = hk
         self.cfg = cfg
         self.history = history
+        self.store = store
+        self.names_path = names_path
 
         # Sensoren: aid -> {name, temp, hum, temp_iid, hum_iid}
         self.sensors: dict[int, dict] = {}
@@ -110,7 +116,37 @@ class ControlLoop:
                 "temp": None, "hum": None,
                 "temp_iid": temp_iid, "hum_iid": hum_iid,
             }
+        self._apply_saved_names()
         log.info("Sensoren erkannt: %s", sorted(self.sensors))
+
+    def _apply_saved_names(self) -> None:
+        if not os.path.exists(self.names_path):
+            return
+        try:
+            with open(self.names_path, encoding="utf-8") as fh:
+                saved = json.load(fh)
+            for aid_str, name in saved.items():
+                aid = int(aid_str)
+                if aid in self.sensors:
+                    self.sensors[aid]["name"] = name
+        except Exception as e:
+            log.warning("Sensor-Namen laden fehlgeschlagen: %s", e)
+
+    def set_sensor_name(self, aid: int, name: str) -> bool:
+        if aid not in self.sensors:
+            return False
+        self.sensors[aid]["name"] = name
+        saved = {}
+        if os.path.exists(self.names_path):
+            try:
+                with open(self.names_path, encoding="utf-8") as fh:
+                    saved = json.load(fh)
+            except Exception:
+                saved = {}
+        saved[str(aid)] = name
+        with open(self.names_path, "w", encoding="utf-8") as fh:
+            json.dump(saved, fh, indent=2, ensure_ascii=False)
+        return True
 
     def _kick(self) -> None:
         self._wake.set()
@@ -128,7 +164,7 @@ class ControlLoop:
         self._kick()
 
     def start_program(self, name: str) -> bool:
-        prog = next((p for p in self.cfg.programs if p.name == name), None)
+        prog = self.store.get(name)
         if prog is None:
             return False
         self.program = prog
@@ -380,5 +416,5 @@ class ControlLoop:
             "phase_remaining": phase_remaining,
             "program_started": self._program_started,
             "error": self.last_error,
-            "programs": [p.name for p in self.cfg.programs],
+            "programs": self.store.names(),
         }

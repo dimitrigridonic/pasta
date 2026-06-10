@@ -1,4 +1,4 @@
-"""FastAPI-Webserver: Handy-Oberfläche + JSON-API."""
+"""FastAPI-Webserver: Dashboard + JSON-API."""
 from __future__ import annotations
 
 import time
@@ -14,6 +14,7 @@ from .config import Config
 from .control import ControlLoop
 from .history import History
 from .hk import HomeKit
+from .programs import ProgramStore
 
 STATIC = Path(__file__).parent / "static"
 
@@ -28,11 +29,24 @@ class ProgReq(BaseModel):
     name: str
 
 
+class ProgramBody(BaseModel):
+    name: str
+    phases: list[dict]
+    old_name: str | None = None
+
+
+class RenameReq(BaseModel):
+    aid: int
+    name: str
+
+
 def create_app(config_path: str = "config.yaml") -> FastAPI:
     cfg = Config.load(config_path)
     hk = HomeKit(cfg.pairing_file, cfg.alias)
     history = History(cfg.log_file, cfg.log_enabled)
-    loop = ControlLoop(hk, cfg, history)
+    store = ProgramStore("programs.json", cfg.programs)
+    store.load()
+    loop = ControlLoop(hk, cfg, history, store, "sensor_names.json")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -82,6 +96,28 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         loop.skip_phase()
         return loop.state()
 
+    # --- Programm-Editor ---
+    @app.get("/api/programs")
+    async def programs_list():
+        return store.list()
+
+    @app.post("/api/programs")
+    async def programs_save(body: ProgramBody):
+        store.upsert(body.name, body.phases, body.old_name)
+        return store.list()
+
+    @app.delete("/api/programs/{name}")
+    async def programs_delete(name: str):
+        store.delete(name)
+        return store.list()
+
+    # --- Sensor umbenennen ---
+    @app.post("/api/sensor/name")
+    async def sensor_name(req: RenameReq):
+        loop.set_sensor_name(req.aid, req.name.strip() or f"Sensor {req.aid}")
+        return loop.state()
+
+    # --- Verlauf ---
     @app.get("/api/history")
     async def get_history(hours: float = 72):
         since = time.time() - hours * 3600
