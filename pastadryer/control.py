@@ -1,10 +1,12 @@
 """Regel-Engine für den Pasta-Trockner.
 
-Modell (vom Nutzer vorgegeben):
-  • Heizungen (beide) halten die Temperatur in einem Band (temp_low..temp_high, z.B. 30–32 °C).
-  • Lüfter senken die Feuchte: laufen, wenn die (aggregierte) Feuchte übers aktuelle
-    Kurven-Ziel steigt — abwechselnd links/rechts im fan_cycle_min-Takt.
-  • Trocken-Programm = Phasen mit Feuchte-Rampen (z.B. 80% halten → 80→70% → 70→60%).
+Modell (vom Nutzer vorgegeben) — FEUCHTE GEWINNT IMMER:
+  • Die Phasen-Feuchte ist eine harte UNTERGRENZE; nie aktiv darunter.
+  • Heizungen halten 30–32 °C, ABER nur solange die Feuchte über dem Minimum liegt.
+    Sinkt sie aufs Minimum → Heizung aus (Temperatur darf fallen).
+  • Lüfter = letzte Stufe: nur wenn die Feuchte TROTZ Maximaltemperatur noch über
+    dem Minimum liegt, lüften wir Feuchte raus — abwechselnd links/rechts.
+  • Trocken-Programm = Phasen mit Feuchte-Rampen (z.B. 80% → 70% → 60%).
   • Alle Sensoren werden einzeln gelesen, angezeigt und geloggt.
 
 Modi: off | manual | program
@@ -279,32 +281,36 @@ class ControlLoop:
             return
         phase = self.program.phases[self.phase_index]
 
-        # --- Heizung: Band-Thermostat (beide Heizungen gemeinsam) ---
+        # --- Feuchte = Untergrenze (Rampe innerhalb der Phase). Gewinnt immer. ---
+        self.humidity_target = self._current_humidity_target(phase)
+        floor = self.humidity_target
         low = phase.temp_low if phase.temp_low is not None else self.cfg.temp_low
         high = phase.temp_high if phase.temp_high is not None else self.cfg.temp_high
         t = self.agg_temp
-        if t is None:
+        h = self.agg_hum
+        hyst = self.cfg.humidity_hysteresis
+
+        # Nur solange die Feuchte ÜBER dem Minimum liegt, darf aktiv getrocknet
+        # (geheizt/gelüftet) werden — sonst würden wir sie unters Minimum drücken.
+        humidity_ok = floor is None or (h is not None and h > floor)
+
+        # --- Heizung: Band low..high, aber nur wenn Feuchte okay (Feuchte gewinnt) ---
+        if t is None or not humidity_ok:
             self.heater_on = False
         elif t < low:
             self.heater_on = True
         elif t > high:
             self.heater_on = False
-        # zwischen low..high: Zustand halten
-        for h in self.cfg.heaters:
-            self.desired[h.point()] = self.heater_on
+        # dazwischen: Zustand halten
+        for hch in self.cfg.heaters:
+            self.desired[hch.point()] = self.heater_on
 
-        # --- Feuchte-Ziel der Kurve (Rampe innerhalb der Phase) ---
-        self.humidity_target = self._current_humidity_target(phase)
-
-        # --- Lüfter: Hygrostat + alternierend links/rechts ---
-        h = self.agg_hum
-        tgt = self.humidity_target
-        hyst = self.cfg.humidity_hysteresis
-        warm_enough = t is not None and t >= self.cfg.min_temp_for_fan
-        if tgt is not None and h is not None and warm_enough:
-            if h > tgt + hyst:
+        # --- Lüfter: letzte Stufe. Nur wenn wir TROTZ Maximaltemperatur die
+        #     Feuchte nicht runterkriegen. Nie unter das Minimum lüften. ---
+        if floor is not None and h is not None and t is not None:
+            if t >= high and h > floor + hyst:
                 self.venting = True
-            elif h < tgt - hyst:
+            elif h <= floor or t < high:
                 self.venting = False
         else:
             self.venting = False

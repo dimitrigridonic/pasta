@@ -79,8 +79,8 @@ function render(s) {
     const isFan = i >= s.heaters.length;
     pill.classList.toggle("active", isFan && s.venting && (i - s.heaters.length) === s.fan_active);
   });
-  $("band").textContent = `Heiz-Band ${s.temp_low}–${s.temp_high}°C · Lüfter wechseln ` +
-    (s.fans.length > 1 ? "links/rechts" : "") + (s.safety_tripped ? " · ⚠️ Sicherheit aktiv" : "");
+  $("band").textContent = `Feuchte = Untergrenze · Heizung ${s.temp_low}–${s.temp_high}°C (nur wenn Feuchte ok) · ` +
+    `Lüfter nur als Notnagel bei ${s.temp_high}°C` + (s.safety_tripped ? " · ⚠️ Sicherheit aktiv" : "");
 
   buildManual(s);
   [...s.heaters, ...s.fans].forEach((ch) => {
@@ -101,7 +101,7 @@ function render(s) {
     $("prog-name").textContent = s.program;
     const ph = s.phase;
     let line = `Phase ${ph.index + 1}/${ph.count}: ${ph.name}`;
-    if (ph.humidity_target != null) line += ` · Ziel ${ph.humidity_target}% rF`;
+    if (ph.humidity_target != null) line += ` · Min. ${ph.humidity_target}% rF`;
     line += ` · ${ph.temp_low}–${ph.temp_high}°C`;
     if (s.phase_remaining != null) line += ` · noch ${dur(s.phase_remaining)}`;
     $("prog-phase").textContent = line;
