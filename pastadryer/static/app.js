@@ -82,7 +82,8 @@ function renderSensors(s) {
 
 /* ---------- Trockner-Schema ---------- */
 // Sensor-Nummer -> Position [x,y] (Seitenansicht). Telai-Reihen y: 110..200.
-const DRYER_POS = { 1: [240, 128], 2: [126, 164], 3: [354, 182], 4: [240, 182], 5: [354, 128], 6: [126, 200] };
+// unterstes Telaio (y200): S6 links, S4 mitte, S3 rechts · 3.-unterstes (y164): S2/S1/S5
+const DRYER_POS = { 6: [126, 200], 4: [240, 200], 3: [354, 200], 2: [126, 164], 1: [240, 164], 5: [354, 164] };
 const sNum = (name) => { const m = String(name).match(/(\d+)/); return m ? +m[1] : null; };
 
 function renderDryer(s) {
