@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
-  <link rel="stylesheet" href="/static/style.css?v=20" />
+  <link rel="stylesheet" href="/static/style.css?v=21" />
 </head>
 <body>
   <header class="topbar">
@@ -83,14 +83,9 @@
         <div class="card-head">
           <h2>Verlauf <small id="hist-stat"></small></h2>
           <div class="chart-controls">
-            <select id="hist-range">
-              <option value="1">1 h</option><option value="6">6 h</option>
-              <option value="24">24 h</option><option value="72" selected>72 h</option>
-            </select>
-            <button id="hist-metric" class="btn ghost sm">Feuchte</button>
             <button id="hist-refresh" class="btn ghost sm">↻</button>
-            <a id="hist-csv" class="btn ghost sm" href="/api/history.csv?hours=72" download>CSV</a>
-            <button id="hist-clear" class="btn ghost sm danger">Löschen</button>
+            <a id="hist-csv" class="btn ghost sm" href="/api/history.csv?hours=100000" download>CSV</a>
+            <button id="hist-clear" class="btn ghost sm danger">CSV löschen</button>
           </div>
         </div>
         <canvas id="hist-canvas"></canvas>
@@ -122,6 +117,6 @@
   </section>
 
   <footer id="foot"></footer>
-  <script src="/static/app.js?v=20"></script>
+  <script src="/static/app.js?v=21"></script>
 </body>
 </html>

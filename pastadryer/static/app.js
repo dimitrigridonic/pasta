@@ -225,6 +225,7 @@ function render(s) {
   else if (!s.reading_ok || (age != null && age > 90)) { conn.textContent = "⚠ Messwerte alt"; conn.classList.add("stale"); }
   else { conn.textContent = `aktuell (${age != null ? Math.round(age) : "?"}s)`; conn.classList.remove("stale"); }
   $("foot").textContent = "Pasta-Trockner · Aqara M2 · lokal";
+  drawChart();
 }
 
 /* ---------- Bedienung ---------- */
@@ -237,6 +238,7 @@ document.querySelectorAll(".mode").forEach((b) =>
 $("program-start").onclick = async () => { phaseTotal = null; render(await api("/api/program/start", { name: $("program-select").value })); };
 $("program-stop").onclick = async () => render(await api("/api/program/stop", null, "POST"));
 $("program-skip").onclick = async () => { phaseTotal = null; render(await api("/api/program/skip", null, "POST")); };
+$("program-select").onchange = () => drawChart();
 $("fault-reset").onclick = async () => render(await api("/api/fault/clear", null, "POST"));
 $("sensors-read").onclick = async () => {
   const b = $("sensors-read"); b.textContent = "…"; b.disabled = true;
@@ -253,88 +255,64 @@ document.querySelectorAll(".ptab").forEach((b) =>
   })
 );
 
-/* ---------- Chart ---------- */
+/* ---------- Chart: Ideallinie des gewählten Programms (keine Sensorwerte) ---------- */
+function idealAtHour(hour, phases) {
+  let el = hour;
+  for (const ph of phases) {
+    const d = +ph.duration_h || 0;
+    if (ph.humidity_start == null) { el -= d; continue; }
+    const end = ph.humidity_end != null ? ph.humidity_end : ph.humidity_start;
+    if (d <= 0) return ph.humidity_start;
+    if (el <= d) return ph.humidity_start + (end - ph.humidity_start) * (el / d);
+    el -= d;
+  }
+  const last = phases[phases.length - 1];
+  return last ? (last.humidity_end != null ? last.humidity_end : last.humidity_start) : null;
+}
+function selectedProgramName() {
+  if (state && state.program) return state.program;
+  const sel = $("program-select");
+  if (sel && sel.value) return sel.value;
+  return allPrograms[0] && allPrograms[0].name;
+}
 function drawChart() {
-  const cv = $("hist-canvas"); if (!lastHist) return;
+  const cv = $("hist-canvas"); if (!cv || !cv.clientWidth) return;
   const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
   cv.width = W * dpr; cv.height = H * dpr;
-  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-  const { names, series } = lastHist, padL = 34, padR = 8, padT = 10, padB = 18;
-  const idx = histMetric === "temp" ? 1 : 2;
-  const aids = Object.keys(series).filter((a) => series[a].length);
-  let tmin = Infinity, tmax = -Infinity, vmin = Infinity, vmax = -Infinity;
-  aids.forEach((a) => series[a].forEach((p) => {
-    if (p[0] < tmin) tmin = p[0]; if (p[0] > tmax) tmax = p[0];
-    if (p[idx] != null) { if (p[idx] < vmin) vmin = p[idx]; if (p[idx] > vmax) vmax = p[idx]; }
-  }));
-  // Ideallinie (nur bei Feuchte + laufendem Programm) ins Wertefenster einbeziehen
-  const idealPhases = histMetric === "hum" && state && state.program_started ? progPhases(state.program) : null;
-  if (idealPhases && isFinite(tmin)) {
-    [Math.max(tmin, state.program_started), tmax].forEach((tt) => {
-      const v = idealHumidityAt(tt, state.program_started, idealPhases);
-      if (v != null) { if (v < vmin) vmin = v; if (v > vmax) vmax = v; }
-    });
-  }
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const padL = 36, padR = 12, padT = 12, padB = 22;
   ctx.font = "11px system-ui"; ctx.fillStyle = "#8b8b93";
-  if (!isFinite(vmin)) { ctx.fillText("noch keine Daten – läuft mit, sobald geloggt wird", padL, H / 2); $("hist-legend").innerHTML = ""; return; }
-  if (vmin === vmax) { vmin -= 1; vmax += 1; }
-  vmin = Math.floor(vmin - 1); vmax = Math.ceil(vmax + 1);
-  const X = (t) => padL + (tmax === tmin ? 0 : (t - tmin) / (tmax - tmin)) * (W - padL - padR);
+  const name = selectedProgramName(), phases = progPhases(name);
+  if (!phases || !phases.length) { ctx.fillText("kein Programm gewählt", padL, H / 2); $("hist-legend").innerHTML = ""; $("hist-stat").textContent = ""; return; }
+  const totalH = phases.reduce((a, ph) => a + (+ph.duration_h || 0), 0) || 1;
+  let vmin = Infinity, vmax = -Infinity;
+  phases.forEach((ph) => [ph.humidity_start, ph.humidity_end].forEach((v) => { if (v != null) { if (v < vmin) vmin = v; if (v > vmax) vmax = v; } }));
+  if (!isFinite(vmin)) { vmin = 40; vmax = 90; }
+  vmin = Math.floor(vmin - 5); vmax = Math.ceil(vmax + 5);
+  const X = (h) => padL + (h / totalH) * (W - padL - padR);
   const Y = (v) => H - padB - (v - vmin) / (vmax - vmin) * (H - padT - padB);
-  // Gitter
   ctx.strokeStyle = "#26262b"; ctx.lineWidth = 1;
-  for (let g = 0; g <= 4; g++) {
-    const v = vmin + (vmax - vmin) * g / 4, y = Y(v);
-    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
-    ctx.fillText(v.toFixed(0) + (histMetric === "temp" ? "°" : "%"), 2, y + 4);
-  }
-  // Linien
-  const leg = $("hist-legend"); leg.innerHTML = "";
-  aids.forEach((a, i) => {
-    const col = PALETTE[i % PALETTE.length];
-    ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.beginPath();
-    let started = false;
-    series[a].forEach((p) => {
-      if (p[idx] == null) return;
-      const x = X(p[0]), y = Y(p[idx]);
-      started ? ctx.lineTo(x, y) : ctx.moveTo(x, y); started = true;
-    });
-    ctx.stroke();
-    const sp = document.createElement("span");
-    sp.innerHTML = `<i style="background:${col}"></i>${names[a] || "Sensor " + a}`;
-    leg.appendChild(sp);
-  });
-  // Harte Ideallinie (weiss, gestrichelt)
-  if (idealPhases && isFinite(tmin)) {
-    const t0 = Math.max(tmin, state.program_started);
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath();
-    let st = false;
-    for (let k = 0; k <= 80; k++) {
-      const tt = t0 + (tmax - t0) * k / 80;
-      const v = idealHumidityAt(tt, state.program_started, idealPhases);
-      if (v == null) continue;
-      const x = X(tt), y = Y(v);
-      st ? ctx.lineTo(x, y) : ctx.moveTo(x, y); st = true;
+  for (let g = 0; g <= 4; g++) { const v = vmin + (vmax - vmin) * g / 4, y = Y(v); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke(); ctx.fillStyle = "#8b8b93"; ctx.fillText(v.toFixed(0) + "%", 2, y + 4); }
+  for (let g = 0; g <= 4; g++) { const h = totalH * g / 4; ctx.fillStyle = "#8b8b93"; ctx.fillText(Math.round(h) + "h", X(h) - 6, H - 6); }
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath();
+  let started = false;
+  for (let k = 0; k <= 160; k++) { const h = totalH * k / 160, v = idealAtHour(h, phases); if (v == null) continue; const x = X(h), y = Y(v); started ? ctx.lineTo(x, y) : ctx.moveTo(x, y); started = true; }
+  ctx.stroke(); ctx.setLineDash([]);
+  let nowLeg = "";
+  if (state && state.program === name && state.program_started) {
+    const eh = (Date.now() / 1000 - state.program_started) / 3600;
+    if (eh >= 0 && eh <= totalH) {
+      const x = X(eh); ctx.strokeStyle = "#009353"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, H - padB); ctx.stroke();
+      const v = idealAtHour(eh, phases); if (v != null) { ctx.fillStyle = "#009353"; ctx.beginPath(); ctx.arc(x, Y(v), 4, 0, 6.283); ctx.fill(); }
+      nowLeg = `<span><i style="background:#009353"></i>Jetzt</span>`;
     }
-    ctx.stroke(); ctx.setLineDash([]);
-    const sp = document.createElement("span");
-    sp.innerHTML = `<i style="background:#fff"></i>Ideallinie`;
-    leg.appendChild(sp);
   }
+  $("hist-stat").textContent = `· ${name} · ${Math.round(totalH)} h`;
+  $("hist-legend").innerHTML = `<span><i style="background:#fff"></i>Ideallinie</span>${nowLeg}`;
 }
-async function loadHistory() {
-  const h = $("hist-range").value;
-  $("hist-csv").href = `/api/history.csv?hours=${h}`;
-  lastHist = await api(`/api/history?hours=${h}`);
-  const n = Object.values(lastHist.series || {}).reduce((a, b) => a + b.length, 0);
-  $("hist-stat").textContent = n ? `· ${n} Punkte` : "";
-  drawChart();
-}
-$("hist-range").onchange = loadHistory;
-$("hist-refresh").onclick = loadHistory;
-$("hist-metric").onclick = () => { histMetric = histMetric === "hum" ? "temp" : "hum"; $("hist-metric").textContent = histMetric === "hum" ? "Feuchte" : "Temperatur"; drawChart(); };
-$("hist-clear").onclick = async () => { if (confirm("Verlauf wirklich löschen?")) { await api("/api/history/clear", {}); loadHistory(); } };
+$("hist-refresh").onclick = () => drawChart();
+$("hist-csv").href = "/api/history.csv?hours=100000";
+$("hist-clear").onclick = async () => { if (confirm("Aufgezeichnete Sensordaten (CSV) löschen?")) await api("/api/history/clear", {}); };
 window.addEventListener("resize", () => drawChart());
 
 /* ---------- Programm-Editor ---------- */
@@ -382,6 +360,7 @@ async function loadPrograms() {
   allPrograms = await api("/api/programs");
   const box = $("prog-editor"); box.innerHTML = "";
   allPrograms.forEach((p) => box.appendChild(programBlock(p)));
+  drawChart();
 }
 $("prog-new").onclick = () => {
   $("prog-editor").appendChild(programBlock({ name: "Neues Programm", phases: [{ name: "Phase 1", duration_h: 10, humidity_start: 80, humidity_end: 70 }] }));
@@ -393,5 +372,4 @@ async function poll() {
   catch (e) { $("conn").textContent = "⚠ keine Verbindung"; $("conn").classList.add("stale"); }
 }
 poll(); setInterval(poll, 3000);
-loadHistory(); setInterval(loadHistory, 60000);
 loadPrograms();
