@@ -112,16 +112,19 @@ function renderDryer(s) {
   }
 
   const mod = (cx, isLeft) => {
-    const hOn = s.heaters[isLeft ? 0 : 1] && s.heaters[isLeft ? 0 : 1].on;
-    const fOn = s.fans[isLeft ? 0 : 1] && s.fans[isLeft ? 0 : 1].on;
+    const hi = isLeft ? 0 : 1;
+    const heater = s.heaters[hi] || {}, fan = s.fans[hi] || {};
+    const hOn = heater.on, fOn = fan.on;
     const ring = ((isLeft && leftBlow) || (!isLeft && rightBlow))
       ? `<rect x="${cx - 54}" y="55" width="108" height="50" rx="14" fill="none" stroke="#009353" stroke-width="2.5"/>` : "";
     const side = isLeft ? "L" : "R";
     return `${ring}
-      <rect x="${cx - 48}" y="63" width="58" height="34" rx="9" fill="${hOn ? "#ff7a59" : "#382722"}"${hOn ? ' filter="url(#dglow)"' : ""}/>
-      <text x="${cx - 19}" y="84" text-anchor="middle" class="dl-m" fill="${hOn ? "#2a0f06" : "#8a7068"}">HEIZ ${side}</text>
-      <circle cx="${cx + 30}" cy="80" r="17" fill="${fOn ? "#56b6e0" : "#22303a"}"${fOn ? ' filter="url(#dglow)"' : ""}/>
-      <text x="${cx + 30}" y="84" text-anchor="middle" class="dl-m" fill="${fOn ? "#04121a" : "#5a6e78"}">FAN</text>`;
+      <g class="ctl" data-aid="${heater.aid}" data-iid="${heater.iid}" style="cursor:pointer">
+        <rect x="${cx - 48}" y="63" width="58" height="34" rx="9" fill="${hOn ? "#ff7a59" : "#382722"}"${hOn ? ' filter="url(#dglow)"' : ""}/>
+        <text x="${cx - 19}" y="84" text-anchor="middle" class="dl-m" fill="${hOn ? "#2a0f06" : "#8a7068"}" style="pointer-events:none">HEIZ ${side}</text></g>
+      <g class="ctl" data-aid="${fan.aid}" data-iid="${fan.iid}" style="cursor:pointer">
+        <circle cx="${cx + 30}" cy="80" r="17" fill="${fOn ? "#56b6e0" : "#22303a"}"${fOn ? ' filter="url(#dglow)"' : ""}/>
+        <text x="${cx + 30}" y="84" text-anchor="middle" class="dl-m" fill="${fOn ? "#04121a" : "#5a6e78"}" style="pointer-events:none">FAN ${side}</text></g>`;
   };
 
   const duct = "M 130 240 V 104 Q 130 80 154 80 H 486 Q 510 80 510 104 V 240";
@@ -244,6 +247,14 @@ $("sensors-read").onclick = async () => {
   const b = $("sensors-read"); b.textContent = "…"; b.disabled = true;
   try { render(await api("/api/sensors/read", null, "POST")); } finally { b.textContent = "↻ Werte holen"; b.disabled = false; }
 };
+
+// Im Trockner-Schema Heizung/Lüfter direkt antippen (manuell schalten)
+$("dryer").addEventListener("click", async (e) => {
+  const g = e.target.closest("[data-aid]");
+  if (!g || !g.dataset.aid || g.dataset.aid === "undefined") return;
+  const aid = +g.dataset.aid, iid = +g.dataset.iid;
+  render(await api("/api/manual", { aid, iid, on: !chOn(state, aid, iid) }));
+});
 
 // Tabs umschalten
 document.querySelectorAll(".ptab").forEach((b) =>
