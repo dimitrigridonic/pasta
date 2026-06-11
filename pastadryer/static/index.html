@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
-  <link rel="stylesheet" href="/static/style.css?v=18" />
+  <link rel="stylesheet" href="/static/style.css?v=19" />
 </head>
 <body>
   <header class="topbar">
@@ -22,14 +22,14 @@
   <div id="banner" class="banner hidden"></div>
 
   <nav class="tabs">
-    <button class="ptab active" data-ptab="trockner">Trockner</button>
+    <button class="ptab active" data-ptab="home">Home</button>
+    <button class="ptab" data-ptab="trockner">Trockner</button>
     <button class="ptab" data-ptab="steuerung">Steuerung</button>
-    <button class="ptab" data-ptab="verlauf">Verlauf</button>
     <button class="ptab" data-ptab="programme">Programme</button>
   </nav>
 
-  <!-- Tab: Trockner -->
-  <section class="panel" data-panel="trockner">
+  <!-- Tab: Home -->
+  <section class="panel" data-panel="home">
     <div class="dash">
       <section class="card kpi-card">
         <div class="kpi-label">Temperatur ⌀</div>
@@ -42,7 +42,7 @@
         <div class="kpi-sub" id="hum-sub"></div>
       </section>
 
-      <section class="card span-all">
+      <section class="card">
         <h2>Aktuelles Programm</h2>
         <div id="prog-running" class="hidden">
           <div class="prog-name" id="prog-name"></div>
@@ -55,12 +55,33 @@
 
       <section class="card span-all">
         <div class="card-head">
-          <h2>Trockner <small>Seitenansicht · Sensoren live</small></h2>
-          <span id="dryer-side" class="sub"></span>
+          <h2>Verlauf <small id="hist-stat"></small></h2>
+          <div class="chart-controls">
+            <select id="hist-range">
+              <option value="1">1 h</option><option value="6">6 h</option>
+              <option value="24">24 h</option><option value="72" selected>72 h</option>
+            </select>
+            <button id="hist-metric" class="btn ghost sm">Feuchte</button>
+            <button id="hist-refresh" class="btn ghost sm">↻</button>
+            <a id="hist-csv" class="btn ghost sm" href="/api/history.csv?hours=72" download>CSV</a>
+            <button id="hist-clear" class="btn ghost sm danger">Löschen</button>
+          </div>
         </div>
-        <div id="dryer"></div>
+        <canvas id="hist-canvas"></canvas>
+        <div id="hist-legend" class="legend"></div>
       </section>
     </div>
+  </section>
+
+  <!-- Tab: Trockner -->
+  <section class="panel hidden" data-panel="trockner">
+    <section class="card span-all">
+      <div class="card-head">
+        <h2>Trockner <small>Seitenansicht · Sensoren live</small></h2>
+        <span id="dryer-side" class="sub"></span>
+      </div>
+      <div id="dryer"></div>
+    </section>
   </section>
 
   <!-- Tab: Steuerung -->
@@ -88,27 +109,6 @@
     </section>
   </section>
 
-  <!-- Tab: Verlauf -->
-  <section class="panel hidden" data-panel="verlauf">
-    <section class="card">
-      <div class="card-head">
-        <h2>Verlauf <small id="hist-stat"></small></h2>
-        <div class="chart-controls">
-          <select id="hist-range">
-            <option value="1">1 h</option><option value="6">6 h</option>
-            <option value="24">24 h</option><option value="72" selected>72 h</option>
-          </select>
-          <button id="hist-metric" class="btn ghost sm">Feuchte</button>
-          <button id="hist-refresh" class="btn ghost sm">↻</button>
-          <a id="hist-csv" class="btn ghost sm" href="/api/history.csv?hours=72" download>CSV</a>
-          <button id="hist-clear" class="btn ghost sm danger">Löschen</button>
-        </div>
-      </div>
-      <canvas id="hist-canvas"></canvas>
-      <div id="hist-legend" class="legend"></div>
-    </section>
-  </section>
-
   <!-- Tab: Programme -->
   <section class="panel hidden" data-panel="programme">
     <section class="card">
@@ -121,6 +121,6 @@
   </section>
 
   <footer id="foot"></footer>
-  <script src="/static/app.js?v=18"></script>
+  <script src="/static/app.js?v=19"></script>
 </body>
 </html>

@@ -82,20 +82,22 @@ function renderSensors(s) {
 
 /* ---------- Trockner-Schema ---------- */
 // Sensor-Nummer -> Position [x,y] (Seitenansicht). Telai-Reihen y: 110..200.
-// Sensoren auf die Telai gelegt: obere Reihe S2/S1/S3, untere Reihe S6/S4/S5
-const DRYER_POS = { 2: [255, 200], 1: [340, 200], 3: [425, 200], 6: [255, 318], 4: [340, 318], 5: [425, 318] };
+const DRYER_POS = { 6: [230, 315], 4: [320, 315], 5: [410, 315], 2: [230, 265], 1: [320, 265], 3: [410, 265] };
 const sNum = (name) => { const m = String(name).match(/(\d+)/); return m ? +m[1] : null; };
 
 function renderDryer(s) {
   const box = $("dryer"); if (!box) return;
-  const u0 = !!((s.heaters[0] && s.heaters[0].on) || (s.fans[0] && s.fans[0].on));
-  const u1 = !!((s.heaters[1] && s.heaters[1].on) || (s.fans[1] && s.fans[1].on));
-  const windOn = u0 || u1;
-  $("dryer-side").textContent = windOn ? "Umluft läuft" : "Umluft aus";
+  const leftBlow = !!((s.heaters[0] && s.heaters[0].on) || (s.fans[0] && s.fans[0].on));
+  const rightBlow = !!((s.heaters[1] && s.heaters[1].on) || (s.fans[1] && s.fans[1].on));
+  const windOn = leftBlow || rightBlow;
+  const windLeft = leftBlow && !rightBlow ? true : (rightBlow && !leftBlow ? false : s.active_side === 0);
+  $("dryer-side").textContent = windOn ? `Wind ${windLeft ? "◀ nach LINKS" : "nach RECHTS ▶"}` : "kein Wind";
   const val = {}; s.sensors.forEach((se) => { const n = sNum(se.name); if (n) val[n] = se; });
 
   let telai = "";
-  for (let x = 190; x <= 470; x += 28) telai += `<line x1="${x}" y1="135" x2="${x}" y2="360" stroke="#44444c" stroke-width="2"/>`;
+  [190, 215, 240, 265, 290, 315].forEach((y) => {
+    telai += `<rect x="175" y="${y - 2}" width="290" height="4" rx="2" fill="#2c2c34"/>`;
+  });
 
   let sensors = "";
   for (const n in DRYER_POS) {
@@ -103,39 +105,38 @@ function renderDryer(s) {
     const t = se && se.temp != null ? `${se.temp.toFixed(1)}°` : "–";
     const h = se && se.hum != null ? `${Math.round(se.hum)}%` : "";
     sensors += `<g>
-      <rect x="${x - 37}" y="${y - 15}" width="74" height="30" rx="9" fill="#17171c" stroke="#3a3a44"/>
+      <rect x="${x - 37}" y="${y - 15}" width="74" height="30" rx="9" fill="#17171c" stroke="#34343e"/>
       <circle cx="${x - 25}" cy="${y}" r="4.5" fill="#009353"/>
       <text x="${x - 14}" y="${y - 2}" class="dl-s" text-anchor="start">S${n}</text>
       <text x="${x - 14}" y="${y + 10}" class="dl-v" text-anchor="start">${t} ${h}</text></g>`;
   }
 
-  // Ventilator+Heizung-Einheit im Kanal (Ring=Heizung, Flügel=Lüfter)
-  const unit = (cy, idx) => {
-    const hOn = s.heaters[idx] && s.heaters[idx].on;
-    const fOn = s.fans[idx] && s.fans[idx].on;
-    const active = hOn || fOn;
-    const ring = active ? `<circle cx="115" cy="${cy}" r="28" fill="none" stroke="#009353" stroke-width="2.5"/>` : "";
-    const b1 = "M0,0 Q4,-15 14,-11 Q9,-3 0,0Z", b2 = "M0,0 Q15,-4 11,-14 Q3,-9 0,0Z";
-    const spin = fOn ? '<animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1.1s" repeatCount="indefinite"/>' : "";
-    const blades = `<g transform="translate(115,${cy})"><g>${spin}
-      <g fill="${fOn ? "#56b6e0" : "#3a3a44"}"><path d="${b1}"/><path d="${b2}" transform="rotate(90)"/><path d="${b1}" transform="rotate(180)"/><path d="${b2}" transform="rotate(270)"/></g></g></g>`;
-    return `${ring}<circle cx="115" cy="${cy}" r="20" fill="#15151a" stroke="${hOn ? "#ff7a59" : "#5a5a62"}" stroke-width="${hOn ? 3 : 2}"${hOn ? ' filter="url(#dglow)"' : ""}/>${blades}<circle cx="115" cy="${cy}" r="3" fill="#0b0b0d"/>`;
+  const mod = (cx, isLeft) => {
+    const hOn = s.heaters[isLeft ? 0 : 1] && s.heaters[isLeft ? 0 : 1].on;
+    const fOn = s.fans[isLeft ? 0 : 1] && s.fans[isLeft ? 0 : 1].on;
+    const ring = ((isLeft && leftBlow) || (!isLeft && rightBlow))
+      ? `<rect x="${cx - 54}" y="55" width="108" height="50" rx="14" fill="none" stroke="#009353" stroke-width="2.5"/>` : "";
+    const side = isLeft ? "L" : "R";
+    return `${ring}
+      <rect x="${cx - 48}" y="63" width="58" height="34" rx="9" fill="${hOn ? "#ff7a59" : "#382722"}"${hOn ? ' filter="url(#dglow)"' : ""}/>
+      <text x="${cx - 19}" y="84" text-anchor="middle" class="dl-m" fill="${hOn ? "#2a0f06" : "#8a7068"}">HEIZ ${side}</text>
+      <circle cx="${cx + 30}" cy="80" r="17" fill="${fOn ? "#56b6e0" : "#22303a"}"${fOn ? ' filter="url(#dglow)"' : ""}/>
+      <text x="${cx + 30}" y="84" text-anchor="middle" class="dl-m" fill="${fOn ? "#04121a" : "#5a6e78"}">FAN</text>`;
   };
 
-  const boxPath = "M 150 80 H 590 V 410 H 150 Q 80 410 80 350 V 140 Q 80 80 150 80 Z";
-  const loop = "M 115 130 V 360 Q 115 382 137 382 H 446 Q 468 382 468 360 V 150 Q 468 128 446 128 H 137 Q 115 128 115 150 Z";
+  const duct = "M 130 240 V 104 Q 130 80 154 80 H 486 Q 510 80 510 104 V 240";
+  const loop = "M 152 96 H 488 Q 510 96 510 118 V 350 Q 510 372 488 372 H 152 Q 130 372 130 350 V 118 Q 130 96 152 96 Z";
 
-  box.innerHTML = `<svg viewBox="0 0 660 470" class="dryer-svg" xmlns="http://www.w3.org/2000/svg">
+  box.innerHTML = `<svg viewBox="0 0 640 430" class="dryer-svg" xmlns="http://www.w3.org/2000/svg">
     <defs><filter id="dglow" x="-60%" y="-60%" width="220%" height="220%">
       <feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-    <path d="${boxPath}" fill="#101014" stroke="#6a6a74" stroke-width="2.5"/>
-    <path d="M 150 122 V 372" fill="none" stroke="#6a6a74" stroke-width="2"/>
+    <rect x="70" y="150" width="500" height="250" rx="16" fill="#101014" stroke="#2a2a30" stroke-width="1.5"/>
     ${telai}
-    <line x1="160" y1="122" x2="560" y2="122" stroke="#3a3a42" stroke-width="2" stroke-dasharray="6 7"/>
-    <line x1="160" y1="372" x2="560" y2="372" stroke="#3a3a42" stroke-width="2" stroke-dasharray="6 7"/>
-    ${windOn ? `<path d="${loop}" class="dryer-flow"/>` : ""}
-    ${unit(185, 0)}
-    ${unit(320, 1)}
+    <path d="${duct}" fill="none" stroke="#34343c" stroke-width="26" stroke-linecap="round"/>
+    <path d="${duct}" fill="none" stroke="#101014" stroke-width="15" stroke-linecap="round"/>
+    ${windOn ? `<path d="${loop}" class="dryer-flow ${windLeft ? "rev" : ""}"/>` : ""}
+    ${mod(200, true)}
+    ${mod(440, false)}
     ${sensors}
   </svg>`;
 }
@@ -220,7 +221,8 @@ function render(s) {
   else banner.classList.add("hidden");
 
   const conn = $("conn"), age = s.reading_age;
-  if (!s.reading_ok || (age != null && age > 90)) { conn.textContent = "⚠ Messwerte alt"; conn.classList.add("stale"); }
+  if (!s.sensors_active) { conn.textContent = "Sensoren im Standby (Batterie sparen)"; conn.classList.remove("stale"); }
+  else if (!s.reading_ok || (age != null && age > 90)) { conn.textContent = "⚠ Messwerte alt"; conn.classList.add("stale"); }
   else { conn.textContent = `aktuell (${age != null ? Math.round(age) : "?"}s)`; conn.classList.remove("stale"); }
   $("foot").textContent = "Pasta-Trockner · Aqara M2 · lokal";
 }
@@ -243,7 +245,7 @@ document.querySelectorAll(".ptab").forEach((b) =>
     const t = b.dataset.ptab;
     document.querySelectorAll(".ptab").forEach((x) => x.classList.toggle("active", x === b));
     document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== t));
-    if (t === "verlauf") drawChart();
+    drawChart();
   })
 );
 

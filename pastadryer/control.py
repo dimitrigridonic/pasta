@@ -235,10 +235,13 @@ class ControlLoop:
         log.info("Control-Loop gestartet (Intervall %ss)", self.cfg.poll_interval)
         while self._running:
             try:
-                await self._read_sensors()
+                # Sensoren NUR im Programm-Modus abfragen (Batterie der Aqara sparen)
+                if self.mode == "program":
+                    await self._read_sensors()
                 self._decide()
                 await self._apply()
-                self._maybe_log()
+                if self.mode == "program":
+                    self._maybe_log()
             except Exception as e:
                 self.last_error = str(e)
                 log.exception("Tick-Fehler: %s", e)
@@ -567,6 +570,7 @@ class ControlLoop:
                       "aid": f.aid, "iid": f.iid} for f in self.cfg.fans],
             "reading_ok": self.last_reading_ok,
             "reading_age": (time.time() - self.last_reading_at) if self.last_reading_at else None,
+            "sensors_active": self.mode == "program",
             "safety_tripped": self.safety_tripped,
             "fault": self.fault,
             "fault_reason": self.fault_reason,
