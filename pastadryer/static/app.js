@@ -236,6 +236,7 @@ document.querySelectorAll(".mode").forEach((b) =>
   b.addEventListener("click", async () => {
     view = b.dataset.mode; applyView();
     if (view === "off") render(await api("/api/off", null, "POST"));
+    else if (view === "manual") render(await api("/api/manual/enter", null, "POST"));
   })
 );
 $("program-start").onclick = async () => { phaseTotal = null; render(await api("/api/program/start", { name: $("program-select").value })); };
@@ -252,7 +253,7 @@ $("sensors-read").onclick = async () => {
 $("dryer").addEventListener("click", async (e) => {
   const g = e.target.closest("[data-aid]");
   if (!g || !g.dataset.aid || g.dataset.aid === "undefined") return;
-  const aid = +g.dataset.aid, iid = +g.dataset.iid;
+  const aid = g.dataset.aid, iid = g.dataset.iid;
   render(await api("/api/manual", { aid, iid, on: !chOn(state, aid, iid) }));
 });
 

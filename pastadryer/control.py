@@ -22,31 +22,23 @@ from collections import deque
 
 from .config import Config
 from .history import History
-from .hk import HomeKit
+from .zb import Zigbee
 from .programs import ProgramStore
 
 log = logging.getLogger(__name__)
 
-TYPE_TEMP = "00000011"
-TYPE_HUM = "00000010"
-TYPE_BATT = "00000068"
-
-
-def _short(uuid: str) -> str:
-    return str(uuid).split("-")[0].lower().zfill(8)[-8:]
-
 
 class ControlLoop:
-    def __init__(self, hk: HomeKit, cfg: Config, history: History,
+    def __init__(self, zb: Zigbee, cfg: Config, history: History,
                  store: ProgramStore, names_path: str = "sensor_names.json"):
-        self.hk = hk
+        self.zb = zb
         self.cfg = cfg
         self.history = history
         self.store = store
         self.names_path = names_path
 
-        # Sensoren: aid -> {name, temp, hum, temp_iid, hum_iid}
-        self.sensors: dict[int, dict] = {}
+        # Sensoren: friendly_name -> {name, temp, hum, batt}
+        self.sensors: dict[str, dict] = {}
         self.agg_temp: float | None = None
         self.agg_hum: float | None = None
         self.max_temp_seen: float | None = None
@@ -101,7 +93,7 @@ class ControlLoop:
 
     # ---- Lifecycle -------------------------------------------------------
     async def start(self) -> None:
-        await self._discover_sensors()
+        self._init_sensors()
         self._running = True
         self._fan_cycle_started = time.monotonic()
         self._task = asyncio.create_task(self._run())
@@ -113,51 +105,32 @@ class ControlLoop:
             await self._task
         await self._all_off()
 
-    async def _discover_sensors(self) -> None:
-        data = await self.hk.list_accessories()
-        names = {s.aid: s.name for s in self.cfg.sensors}
-        wanted = {s.aid for s in self.cfg.sensors}  # leer = alle
-        for acc in data:
-            aid = acc.get("aid")
-            temp_iid = hum_iid = batt_iid = None
-            for svc in acc.get("services", []):
-                for ch in svc.get("characteristics", []):
-                    s = _short(ch.get("type"))
-                    if s == TYPE_TEMP:
-                        temp_iid = ch.get("iid")
-                    elif s == TYPE_HUM:
-                        hum_iid = ch.get("iid")
-                    elif s == TYPE_BATT:
-                        batt_iid = ch.get("iid")
-            if temp_iid is None and hum_iid is None:
-                continue
-            if wanted and aid not in wanted:
-                continue
-            self.sensors[aid] = {
-                "name": names.get(aid, f"Sensor {aid}"),
-                "temp": None, "hum": None, "batt": None,
-                "temp_iid": temp_iid, "hum_iid": hum_iid, "batt_iid": batt_iid,
+    def _init_sensors(self) -> None:
+        """Sensoren aus der Konfiguration (z2m friendly_names) anlegen."""
+        for sc in self.cfg.sensors:
+            self.sensors[sc.name] = {
+                "name": sc.name, "temp": None, "hum": None, "batt": None,
             }
         self._apply_saved_names()
-        log.info("Sensoren erkannt: %s", sorted(self.sensors))
+        log.info("Sensoren (z2m): %s", list(self.sensors))
 
     def _apply_saved_names(self) -> None:
+        """Optionaler Anzeige-Alias je friendly_name (sensor_names.json)."""
         if not os.path.exists(self.names_path):
             return
         try:
             with open(self.names_path, encoding="utf-8") as fh:
                 saved = json.load(fh)
-            for aid_str, name in saved.items():
-                aid = int(aid_str)
-                if aid in self.sensors:
-                    self.sensors[aid]["name"] = name
+            for key, name in saved.items():
+                if key in self.sensors:
+                    self.sensors[key]["name"] = name
         except Exception as e:
             log.warning("Sensor-Namen laden fehlgeschlagen: %s", e)
 
-    def set_sensor_name(self, aid: int, name: str) -> bool:
-        if aid not in self.sensors:
+    def set_sensor_name(self, key: str, name: str) -> bool:
+        if key not in self.sensors:
             return False
-        self.sensors[aid]["name"] = name
+        self.sensors[key]["name"] = name
         saved = {}
         if os.path.exists(self.names_path):
             try:
@@ -165,7 +138,7 @@ class ControlLoop:
                     saved = json.load(fh)
             except Exception:
                 saved = {}
-        saved[str(aid)] = name
+        saved[key] = name
         with open(self.names_path, "w", encoding="utf-8") as fh:
             json.dump(saved, fh, indent=2, ensure_ascii=False)
         return True
@@ -182,9 +155,22 @@ class ControlLoop:
         self.mode = "off"
         self.program = None
         self.resting = False
+        for k in self.manual:        # Manuell-Schalter zurücksetzen (sauberer Reset)
+            self.manual[k] = False
         self._kick()
 
-    def set_manual(self, aid: int, iid: int, value: bool) -> None:
+    def enter_manual(self) -> None:
+        """Manuell-Modus betreten: sauberer Start, alle Schalter aus."""
+        if self.fault:
+            return
+        self.mode = "manual"
+        self.program = None
+        self.resting = False
+        for k in self.manual:
+            self.manual[k] = False
+        self._kick()
+
+    def set_manual(self, aid: str, iid: str, value: bool) -> None:
         if self.fault:
             return   # verriegelt: erst quittieren
         self.mode = "manual"
@@ -240,9 +226,8 @@ class ControlLoop:
         log.info("Control-Loop gestartet (Intervall %ss)", self.cfg.poll_interval)
         while self._running:
             try:
-                # Sensoren NUR im Programm-Modus abfragen (Batterie der Aqara sparen)
-                if self.mode == "program":
-                    await self._read_sensors()
+                # Push-Daten aus dem MQTT-Cache lesen (kostet keine Batterie)
+                await self._read_sensors()
                 self._decide()
                 await self._apply()
                 if self.mode == "program":
@@ -257,22 +242,18 @@ class ControlLoop:
             self._wake.clear()
 
     async def _read_sensors(self) -> None:
-        points = []
-        for aid, s in self.sensors.items():
-            for key in ("temp_iid", "hum_iid", "batt_iid"):
-                if s[key]:
-                    points.append((aid, s[key]))
-        if not points:
-            return
+        """Letzte Push-Werte aus dem z2m/MQTT-Cache übernehmen."""
         try:
-            async with self._read_lock:
-                vals = await self.hk.get_values(points)
-            for aid, s in self.sensors.items():
-                for key, field in (("temp_iid", "temp"), ("hum_iid", "hum"), ("batt_iid", "batt")):
-                    if s[key] and (aid, s[key]) in vals:
-                        v = vals[(aid, s[key])]
-                        if v is not None:
-                            s[field] = round(float(v), 1) if field != "batt" else int(v)
+            for name, s in self.sensors.items():
+                d = self.zb.get(name)
+                if not d:
+                    continue
+                if d.get("temperature") is not None:
+                    s["temp"] = round(float(d["temperature"]), 1)
+                if d.get("humidity") is not None:
+                    s["hum"] = round(float(d["humidity"]), 1)
+                if d.get("battery") is not None:
+                    s["batt"] = int(d["battery"])
             self._aggregate()
             if self.agg_hum is not None:
                 nowm = time.monotonic()
@@ -281,7 +262,8 @@ class ControlLoop:
                 cutoff = nowm - (span + 120)
                 while self._hum_hist and self._hum_hist[0][0] < cutoff:
                     self._hum_hist.popleft()
-            self.last_reading_ok = True
+            self.last_reading_ok = any(s["temp"] is not None or s["hum"] is not None
+                                       for s in self.sensors.values())
             self.last_reading_at = time.time()
             self.last_error = None
         except Exception as e:
@@ -515,7 +497,7 @@ class ControlLoop:
             if self._written.get(point) == value:
                 continue
             try:
-                await self.hk.set_value(point[0], point[1], value)
+                await self.zb.set_state(point[0], point[1], value)
                 self._written[point] = value
                 log.info("%s -> %s", point, "AN" if value else "AUS")
             except Exception as e:
@@ -525,7 +507,7 @@ class ControlLoop:
     async def _all_off(self) -> None:
         for ch in self.cfg.heaters + self.cfg.fans:
             try:
-                await self.hk.set_value(ch.aid, ch.iid, False)
+                await self.zb.set_state(ch.aid, ch.iid, False)
             except Exception:
                 pass
 
@@ -555,8 +537,8 @@ class ControlLoop:
         return {
             "mode": self.mode,
             "sensors": [
-                {"aid": aid, "name": s["name"], "temp": s["temp"], "hum": s["hum"], "batt": s["batt"]}
-                for aid, s in sorted(self.sensors.items())
+                {"aid": key, "name": s["name"], "temp": s["temp"], "hum": s["hum"], "batt": s["batt"]}
+                for key, s in sorted(self.sensors.items())
             ],
             "agg_temp": self.agg_temp,
             "agg_hum": self.agg_hum,
@@ -576,7 +558,7 @@ class ControlLoop:
                       "aid": f.aid, "iid": f.iid} for f in self.cfg.fans],
             "reading_ok": self.last_reading_ok,
             "reading_age": (time.time() - self.last_reading_at) if self.last_reading_at else None,
-            "sensors_active": self.mode == "program",
+            "sensors_active": True,
             "safety_tripped": self.safety_tripped,
             "fault": self.fault,
             "fault_reason": self.fault_reason,

@@ -1,64 +1,56 @@
-# Kopiere nach config.yaml und passe an. aid/iid kommen aus:
-#   python -m pastadryer.cli dump
+# Pasta-Trockner — Konfiguration (zigbee2mqtt / MQTT).
+# Geräte werden über ihre z2m friendly_names angesprochen.
 
-homekit:
-  pairing_file: pairing.json
-  alias: pastadryer
+mqtt:
+  host: localhost
+  port: 1883
 
 web:
   host: 0.0.0.0      # vom Handy im WLAN erreichbar
   port: 8000
 
 control:
-  poll_interval: 15      # Sekunden zwischen Messungen
-  aggregate: average     # average | max | min  — wie aus den Sensoren EIN Regelwert wird
-  temp_low: 30           # Heizungen AN unterhalb (°C)
-  temp_high: 32          # Heizungen AUS oberhalb (°C)
-  max_temp: 38           # harte Sicherheits-Abschaltung der Heizungen (°C)
-  heater_max_on: 6       # SICHERHEIT: Heizung-Dauerlauf > X min -> Not-Aus + verriegeln
-  # Vorheizen bei leerem Kasten vor JEDEM Programm (Seiten wechseln ab):
-  preheat_enabled: true
-  preheat_target: 30     # vorheizen bis diese Temperatur (°C)
-  preheat_max_min: 30    # höchstens so lange (Minuten) -> dann Pasta einstellen
-  humidity_hysteresis: 3 # Schalt-Totband Lüfter (% rF)
-  fan_cycle_min: 5       # Seitenwechsel links/rechts alle X Min. (MUSS < heater_max_on!)
-  min_temp_for_fan: 0    # Lüfter erst ab dieser Temp (0 = immer erlaubt)
-  # Dynamische Ruhephase: erreicht die Feuchte die Ideallinie, wird ALLES aus-
-  # geschaltet, bis sie sich wieder über die Linie (+ humidity_hysteresis) erholt
-  # hat. Dauer = dynamisch (nicht fix).
-  rate_window_min: 40        # Messfenster nur für die angezeigte Abfall-Rate (Min.)
-  # Heizung sitzt oben & braucht Zeit zum Wirken -> Mindest-Laufzeit/-Pause
-  heater_min_on: 5           # Heizung läuft min. so lange (Minuten)
-  heater_min_off: 5          # danach min. so lange Pause/beobachten (Minuten)
-  # Lüfter nur als Notnagel, wenn die Feuchte lange nicht fällt
-  fan_stall_h: 5             # ... so viele Stunden praktisch ohne Abfall
-  fan_stall_drop: 1.0        # ... weniger als so viele %-Punkte gefallen
+  poll_interval: 15          # Sekunden zwischen Regel-Ticks (liest MQTT-Cache)
+  aggregate: average         # average | max | min — wie aus den Sensoren EIN Regelwert wird
+  temp_low: 30               # Heizungen AN unterhalb (°C)
+  temp_high: 32              # Heizungen AUS oberhalb (°C)
+  max_temp: 38               # harte Sicherheits-Abschaltung der Heizungen (°C)
+  humidity_hysteresis: 3     # Reserve über der Ideallinie (% rF)
+  fan_cycle_min: 5           # Heizung & Lüfter wechseln links/rechts alle X Min (< heater_max_on!)
+  rate_window_min: 40        # Messfenster für die Feuchte-Abfallrate (Anzeige)
+  heater_min_on: 5           # Heizung Mindest-Laufzeit (Min, Trägheit)
+  heater_min_off: 5          # Heizung Mindest-Pause (Min)
+  fan_stall_h: 5             # Lüfter erst wenn Feuchte über so viele Stunden stillsteht
+  fan_stall_drop: 1.0        # … und dabei < diesem Abfall (%-Punkte)
+  heater_max_on: 6           # SICHERHEIT: Heizung-Dauerlauf > X Min -> verriegelnder Not-Aus
+  preheat_enabled: true      # Vorheizen (leerer Kasten) vor dem Programm
+  preheat_target: 30         # Vorheiz-Zieltemperatur (°C)
+  preheat_max_min: 30        # … maximal so lange vorheizen (Min)
 
-# Relais-Kanäle (identifiziert per Schalttest)
+# Relais-Kanäle: l1 = Heizung, l2 = Lüfter (per Leistungsmessung verifiziert)
 heaters:
-  - { name: "Heizung links",  aid: 72, iid: 262147 }
-  - { name: "Heizung rechts", aid: 71, iid: 262147 }
+  - { name: "Heizung links",  device: "Relais links",  prop: state_l1 }
+  - { name: "Heizung rechts", device: "Relais rechts", prop: state_l1 }
 fans:
-  - { name: "Lüfter links",   aid: 72, iid: 327683 }
-  - { name: "Lüfter rechts",  aid: 71, iid: 327683 }
+  - { name: "Lüfter links",   device: "Relais links",  prop: state_l2 }
+  - { name: "Lüfter rechts",  device: "Relais rechts", prop: state_l2 }
 
-# Sensoren: leer = ALLE Temp/Feuchte-Sensoren automatisch.
-# Sobald die Telai-Zuordnung steht, hier benennen:
-sensors: []
-#  - { name: "Telaio 1", aid: 33 }
-#  - { name: "Telaio 2", aid: 66 }
-#  - { name: "Telaio 5", aid: 73 }
+# Sensoren = z2m friendly_names (Push: Werte kommen von selbst, keine Batterie-Kosten)
+sensors:
+  - "Sensor 1"
+  - "Sensor 2"
+  - "Sensor 3"
+  - "Sensor 4"
+  - "Sensor 5"
+  - "Sensor 6"
 
 logging:
   enabled: true
-  file: history.db       # SQLite-Verlauf (für Auswertung nach dem Lauf)
-  interval: 60           # Sekunden zwischen History-Punkten
+  file: history.db
+  interval: 60
 
-# Trocken-Programme (Seed; im Browser editierbar -> programs.json).
-# Heizung hält temp_low..temp_high; Lüfter regeln auf die Feuchte-Rampe
-# (humidity_start -> humidity_end über die Phasendauer). Zahlen wie 20-20-15 = h.
+# Trocken-Programme (Seed; im Browser editierbar -> programs.json)
 programs:
-  # Pasta mit Loch (Maccheroni, Paccheri, Rigatoni): zuerst auf min. 80% halten.
   - name: "Maccheroni (16-20-20-12)"
     phases:
       - { name: "80% halten", duration_h: 16, humidity_start: 80, humidity_end: 80 }

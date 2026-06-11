@@ -1,4 +1,4 @@
-aiohomekit>=3.0
+aiomqtt>=2.0
 fastapi>=0.110
 uvicorn[standard]>=0.29
 PyYAML>=6.0

@@ -13,15 +13,15 @@ from pydantic import BaseModel
 from .config import Config
 from .control import ControlLoop
 from .history import History
-from .hk import HomeKit
+from .zb import Zigbee
 from .programs import ProgramStore
 
 STATIC = Path(__file__).parent / "static"
 
 
 class ManualReq(BaseModel):
-    aid: int
-    iid: int
+    aid: str
+    iid: str
     on: bool
 
 
@@ -36,21 +36,21 @@ class ProgramBody(BaseModel):
 
 
 class RenameReq(BaseModel):
-    aid: int
+    aid: str
     name: str
 
 
 def create_app(config_path: str = "config.yaml") -> FastAPI:
     cfg = Config.load(config_path)
-    hk = HomeKit(cfg.pairing_file, cfg.alias)
+    zb = Zigbee(cfg.mqtt_host, cfg.mqtt_port)
     history = History(cfg.log_file, cfg.log_enabled)
     store = ProgramStore("programs.json", cfg.programs)
     store.load()
-    loop = ControlLoop(hk, cfg, history, store, "sensor_names.json")
+    loop = ControlLoop(zb, cfg, history, store, "sensor_names.json")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        await hk.start()
+        await zb.start()
         history.start()
         await loop.start()
         try:
@@ -58,7 +58,7 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         finally:
             await loop.stop()
             history.close()
-            await hk.stop()
+            await zb.stop()
 
     app = FastAPI(title="Pasta-Trockner", lifespan=lifespan)
 
@@ -78,6 +78,11 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
     @app.post("/api/manual")
     async def manual(req: ManualReq):
         loop.set_manual(req.aid, req.iid, req.on)
+        return loop.state()
+
+    @app.api_route("/api/manual/enter", methods=["GET", "POST"])
+    async def manual_enter():
+        loop.enter_manual()
         return loop.state()
 
     @app.post("/api/program/start")

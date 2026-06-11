@@ -1,4 +1,7 @@
-"""Konfiguration laden (config.yaml)."""
+"""Konfiguration laden (config.yaml). Geräte werden über zigbee2mqtt adressiert:
+Relais-Kanal = (device friendly_name, property z.B. state_l1); Sensor = friendly_name.
+Intern heissen die Felder weiter aid/iid (= device/property) — minimiert Code-Änderungen.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -8,37 +11,35 @@ import yaml
 
 @dataclass
 class Channel:
-    """Ein schaltbarer Relais-Kanal (Heizung oder Lüfter)."""
+    """Ein schaltbarer Relais-Kanal: aid=z2m-Gerät, iid=Property (state_l1/state_l2)."""
     name: str
-    aid: int
-    iid: int
+    aid: str   # z2m friendly_name, z.B. "Relais links"
+    iid: str   # Property, z.B. "state_l1"
 
     @classmethod
     def parse(cls, d: dict) -> "Channel":
-        return cls(name=d.get("name", "?"), aid=int(d["aid"]), iid=int(d["iid"]))
+        return cls(name=d.get("name", "?"), aid=str(d["device"]), iid=str(d["prop"]))
 
-    def point(self) -> tuple[int, int]:
+    def point(self) -> tuple[str, str]:
         return (self.aid, self.iid)
 
 
 @dataclass
 class SensorCfg:
-    """Optionaler Name für einen Sensor (sonst Auto-Erkennung über aid)."""
-    name: str
-    aid: int
+    name: str   # z2m friendly_name, z.B. "Sensor 1"
 
     @classmethod
-    def parse(cls, d: dict) -> "SensorCfg":
-        return cls(name=d.get("name", f"Sensor {d['aid']}"), aid=int(d["aid"]))
+    def parse(cls, d) -> "SensorCfg":
+        return cls(name=str(d))
 
 
 @dataclass
 class Phase:
     name: str
-    duration_h: float | None          # None = bis manuell weiter
+    duration_h: float | None
     humidity_start: float | None
     humidity_end: float | None
-    temp_low: float | None = None     # überschreibt globales temp_low/high
+    temp_low: float | None = None
     temp_high: float | None = None
 
     @classmethod
@@ -65,36 +66,36 @@ class Program:
 
 @dataclass
 class Config:
-    # HomeKit
-    pairing_file: str
-    alias: str
+    # MQTT / zigbee2mqtt
+    mqtt_host: str
+    mqtt_port: int
     # Web
     host: str
     port: int
     # Regelung
     poll_interval: float
-    aggregate: str            # average | max | min  (Sensor-Aggregation für Regelung)
-    temp_low: float           # Heizung AN unterhalb
-    temp_high: float          # Heizung AUS oberhalb
-    max_temp: float           # harte Sicherheits-Abschaltung
+    aggregate: str
+    temp_low: float
+    temp_high: float
+    max_temp: float
     humidity_hysteresis: float
-    fan_cycle_min: float      # Wechsel-Takt links/rechts (Minuten)
-    min_temp_for_fan: float   # Lüfter erst ab dieser Temp
-    drop_tolerance_per_h: float  # erlaubter Feuchte-Abfall ÜBER der Soll-Rampe (%/h)
-    rest_min: float           # Dauer einer Ruhephase (Minuten)
-    rate_window_min: float    # Fenster zur Messung der Abfall-Geschwindigkeit (Minuten)
-    heater_min_on: float      # Mindest-Laufzeit Heizung (Minuten) – Trägheit
-    heater_min_off: float     # Mindest-Pause Heizung (Minuten) – beobachten
-    fan_stall_h: float        # Lüfter erst, wenn Feuchte so lange (h) nicht fällt
-    fan_stall_drop: float     # … und in dieser Zeit weniger als X %-Punkte gefallen ist
-    heater_max_on: float      # SICHERHEIT: Heizung-Dauerlauf > X min -> Not-Aus + verriegeln
-    preheat_enabled: bool     # Vorheizphase vor jedem Programm (leerer Kasten)
-    preheat_target: float     # Vorheizen bis diese Temperatur (°C)
-    preheat_max_min: float    # … höchstens so lange (Minuten)
+    fan_cycle_min: float
+    min_temp_for_fan: float
+    drop_tolerance_per_h: float
+    rest_min: float
+    rate_window_min: float
+    heater_min_on: float
+    heater_min_off: float
+    fan_stall_h: float
+    fan_stall_drop: float
+    heater_max_on: float
+    preheat_enabled: bool
+    preheat_target: float
+    preheat_max_min: float
     # Geräte
     heaters: list[Channel]
     fans: list[Channel]
-    sensors: list[SensorCfg]  # leer = alle automatisch
+    sensors: list[SensorCfg]
     # Logging
     log_enabled: bool
     log_file: str
@@ -107,14 +108,14 @@ class Config:
         with open(path, encoding="utf-8") as fh:
             raw = yaml.safe_load(fh)
 
-        hk = raw.get("homekit", {})
+        mq = raw.get("mqtt", {})
         web = raw.get("web", {})
         c = raw.get("control", {})
         log = raw.get("logging", {})
 
         return cls(
-            pairing_file=hk.get("pairing_file", "pairing.json"),
-            alias=hk.get("alias", "pastadryer"),
+            mqtt_host=mq.get("host", "localhost"),
+            mqtt_port=int(mq.get("port", 1883)),
             host=web.get("host", "0.0.0.0"),
             port=int(web.get("port", 8000)),
             poll_interval=float(c.get("poll_interval", 15)),
@@ -123,7 +124,7 @@ class Config:
             temp_high=float(c.get("temp_high", 32)),
             max_temp=float(c.get("max_temp", 38)),
             humidity_hysteresis=float(c.get("humidity_hysteresis", 3)),
-            fan_cycle_min=float(c.get("fan_cycle_min", 10)),
+            fan_cycle_min=float(c.get("fan_cycle_min", 5)),
             min_temp_for_fan=float(c.get("min_temp_for_fan", 0)),
             drop_tolerance_per_h=float(c.get("drop_tolerance_per_h", 1.5)),
             rest_min=float(c.get("rest_min", 120)),
