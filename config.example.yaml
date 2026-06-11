@@ -26,6 +26,8 @@ control:
   preheat_enabled: true      # Vorheizen (leerer Kasten) vor dem Programm
   preheat_target: 30         # Vorheiz-Zieltemperatur (°C)
   preheat_max_min: 30        # … maximal so lange vorheizen (Min)
+  side_bias_min: 2.5         # ab dieser Feuchte-Differenz L/R (%rF) wird die feuchtere Seite geheizt
+                             # (statt stur abzuwechseln); darunter normaler Seitenwechsel im Takt
 
 # Relais-Kanäle: l1 = Heizung, l2 = Lüfter (per Leistungsmessung verifiziert)
 heaters:
@@ -43,6 +45,13 @@ sensors:
   - "Sensor 4"
   - "Sensor 5"
   - "Sensor 6"
+
+# Links/Rechts-Zuordnung für die intelligente Heizseiten-Wahl.
+# Die feuchtere Seite wird geheizt; eine schon trockenere Seite NICHT.
+# Mitte (Sensor 1 & 4) bleibt neutral -> zählt nur zum Gesamtwert (Ideallinie/Ruhephase).
+sides:
+  left:  ["Sensor 2", "Sensor 6"]
+  right: ["Sensor 3", "Sensor 5"]
 
 logging:
   enabled: true

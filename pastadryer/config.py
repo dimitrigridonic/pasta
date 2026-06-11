@@ -100,6 +100,10 @@ class Config:
     log_enabled: bool
     log_file: str
     log_interval: float
+    # Seiten-Zuordnung (für die intelligente Heizseiten-Wahl): friendly_names je Seite
+    sides_left: list[str] = field(default_factory=list)
+    sides_right: list[str] = field(default_factory=list)
+    side_bias_min: float = 2.5   # ab dieser Feuchte-Differenz (%rF) wird die feuchtere Seite bevorzugt
     # Programme
     programs: list[Program] = field(default_factory=list)
 
@@ -112,6 +116,7 @@ class Config:
         web = raw.get("web", {})
         c = raw.get("control", {})
         log = raw.get("logging", {})
+        sides = raw.get("sides", {}) or {}
 
         return cls(
             mqtt_host=mq.get("host", "localhost"),
@@ -143,5 +148,8 @@ class Config:
             log_enabled=bool(log.get("enabled", True)),
             log_file=log.get("file", "history.db"),
             log_interval=float(log.get("interval", 60)),
+            sides_left=[str(x) for x in (sides.get("left") or [])],
+            sides_right=[str(x) for x in (sides.get("right") or [])],
+            side_bias_min=float(c.get("side_bias_min", 2.5)),
             programs=[Program.parse(p) for p in raw.get("programs", [])],
         )

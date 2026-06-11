@@ -307,6 +307,27 @@ class ControlLoop:
         r = self._drop_over(self.cfg.rate_window_min * 60)
         return None if r is None else r[0] / (r[1] / 3600)
 
+    def _side_hum(self, side: int) -> float | None:
+        """Mittlere Feuchte einer Seite (0=links, 1=rechts) aus den zugeordneten Sensoren."""
+        names = self.cfg.sides_right if side == 1 else self.cfg.sides_left
+        vals = [self.sensors[n]["hum"] for n in names
+                if n in self.sensors and self.sensors[n]["hum"] is not None]
+        return round(sum(vals) / len(vals), 1) if vals else None
+
+    def _pick_side(self, prev_side: int, nowm: float) -> int:
+        """Welche Seite heizen/lüften? Die FEUCHTERE Seite gewinnt; nur bei etwa
+        gleicher Feuchte wird im Takt abgewechselt (gleichmäßige Trocknung)."""
+        n = max(len(self.cfg.heaters), len(self.cfg.fans), 1)
+        if n < 2:
+            return 0
+        hl, hr = self._side_hum(0), self._side_hum(1)
+        timer_due = nowm - self._fan_cycle_started >= self.cfg.fan_cycle_min * 60
+        if hl is not None and hr is not None and abs(hl - hr) >= self.cfg.side_bias_min:
+            return 0 if hl > hr else 1          # feuchtere Seite heizen (trockene NICHT)
+        if timer_due:
+            return (prev_side + 1) % n          # ausgeglichen -> abwechseln
+        return prev_side
+
     # ---- Regel-Logik -----------------------------------------------------
     def _decide(self) -> None:
         # Stellglied-Wunsch auf Basis Modus berechnen
@@ -418,10 +439,22 @@ class ControlLoop:
             return
 
         # ===== Über der Linie: aktiv trocknen =====
-        humidity_ok = floor is None or (h is not None and h > floor)
+        nowm = time.monotonic()
+
+        # --- Heizseite wählen: die FEUCHTERE Seite gewinnt (nicht stur abwechseln) ---
+        new_side = self._pick_side(self.active_side, nowm)
+        if new_side != self.active_side:
+            self.active_side = new_side
+            self._fan_cycle_started = nowm
+
+        # Feuchte-Gate auf die AKTIVE Seite: eine schon trockene Seite NICHT heizen,
+        # auch wenn sie laut Takt „dran" wäre. Fällt zurück auf den Gesamtwert,
+        # falls die Seite (noch) keine Sensordaten hat.
+        h_side = self._side_hum(self.active_side)
+        h_gate = h_side if h_side is not None else h
+        humidity_ok = floor is None or (h_gate is not None and h_gate > floor)
 
         # --- Heizung: Band low..high mit Trägheit (Heizung sitzt oben, ~2-3 min bis Wirkung) ---
-        nowm = time.monotonic()
         force_off = (t is None) or (not humidity_ok)   # an der Linie -> sofort aus
         if force_off:
             band_on = False
@@ -453,11 +486,7 @@ class ControlLoop:
         else:
             self.venting = False
 
-        # --- Seiten IMMER abwechseln: gilt für Heizung UND Lüfter (links/rechts) ---
-        n = max(len(self.cfg.heaters), len(self.cfg.fans), 1)
-        if time.monotonic() - self._fan_cycle_started >= self.cfg.fan_cycle_min * 60:
-            self.active_side = (self.active_side + 1) % n
-            self._fan_cycle_started = time.monotonic()
+        # --- Stellglieder auf die gewählte aktive Seite legen (Heizung UND Lüfter) ---
         for i, hch in enumerate(self.cfg.heaters):
             self.desired[hch.point()] = self.heater_on and (i == self.active_side)
         for i, f in enumerate(self.cfg.fans):
@@ -548,6 +577,8 @@ class ControlLoop:
             "heater_on": self.heater_on,
             "venting": self.venting,
             "active_side": self.active_side,
+            "hum_left": self._side_hum(0),
+            "hum_right": self._side_hum(1),
             "resting": self.resting,
             "rest_recover_to": round(self.humidity_target + self.cfg.humidity_hysteresis, 1)
                 if (self.resting and self.humidity_target is not None) else None,

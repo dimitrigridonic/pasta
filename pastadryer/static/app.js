@@ -91,7 +91,8 @@ function renderDryer(s) {
   const rightBlow = !!((s.heaters[1] && s.heaters[1].on) || (s.fans[1] && s.fans[1].on));
   const windOn = leftBlow || rightBlow;
   const windLeft = leftBlow && !rightBlow ? true : (rightBlow && !leftBlow ? false : s.active_side === 0);
-  $("dryer-side").textContent = windOn ? `Wind ${windLeft ? "◀ nach LINKS" : "nach RECHTS ▶"}` : "kein Wind";
+  const sideHum = (s.hum_left != null && s.hum_right != null) ? `  ·  Feuchte L ${fmt(s.hum_left, 0)}% / R ${fmt(s.hum_right, 0)}%` : "";
+  $("dryer-side").textContent = (windOn ? `Wind ${windLeft ? "◀ nach LINKS" : "nach RECHTS ▶"}` : "kein Wind") + sideHum;
   const val = {}; s.sensors.forEach((se) => { const n = sNum(se.name); if (n) val[n] = se; });
 
   let telai = "";
