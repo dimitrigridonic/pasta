@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
-  <link rel="stylesheet" href="/static/style.css?v=19" />
+  <link rel="stylesheet" href="/static/style.css?v=20" />
 </head>
 <body>
   <header class="topbar">
@@ -24,7 +24,6 @@
   <nav class="tabs">
     <button class="ptab active" data-ptab="home">Home</button>
     <button class="ptab" data-ptab="trockner">Trockner</button>
-    <button class="ptab" data-ptab="steuerung">Steuerung</button>
     <button class="ptab" data-ptab="programme">Programme</button>
   </nav>
 
@@ -50,9 +49,36 @@
           <div class="prog-bar"><div id="prog-bar-fill"></div></div>
           <div class="band" id="band"></div>
         </div>
-        <div id="prog-empty" class="cp-empty">Kein Programm aktiv – im <b>Steuerung</b>-Tab wählen und starten.</div>
+        <div id="prog-empty" class="cp-empty">Kein Programm aktiv – unten „Programm" wählen und starten.</div>
       </section>
 
+      <!-- Steuerung (oben rechts) -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Steuerung</h2>
+          <button id="sensors-read" class="btn ghost sm">↻ Werte holen</button>
+        </div>
+        <div class="modes">
+          <button data-mode="off" class="mode">Aus</button>
+          <button data-mode="manual" class="mode">Manuell</button>
+          <button data-mode="program" class="mode">Programm</button>
+        </div>
+        <div id="manual-card" class="hidden sub-block">
+          <div class="toggles" id="manual-toggles"></div>
+        </div>
+        <div id="program-card" class="hidden sub-block">
+          <select id="program-select"></select>
+          <div class="row">
+            <button id="program-start" class="btn primary">Start</button>
+            <button id="program-stop" class="btn hidden">Stopp</button>
+          </div>
+          <div id="program-status" class="prog-status hidden">
+            <button id="program-skip" class="btn ghost">Phase überspringen ⏭</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Verlauf -->
       <section class="card span-all">
         <div class="card-head">
           <h2>Verlauf <small id="hist-stat"></small></h2>
@@ -84,31 +110,6 @@
     </section>
   </section>
 
-  <!-- Tab: Steuerung -->
-  <section class="panel hidden" data-panel="steuerung">
-    <section class="card">
-      <h2>Steuerung</h2>
-      <div class="modes">
-        <button data-mode="off" class="mode">Aus</button>
-        <button data-mode="manual" class="mode">Manuell</button>
-        <button data-mode="program" class="mode">Programm</button>
-      </div>
-      <div id="manual-card" class="hidden sub-block">
-        <div class="toggles" id="manual-toggles"></div>
-      </div>
-      <div id="program-card" class="hidden sub-block">
-        <select id="program-select"></select>
-        <div class="row">
-          <button id="program-start" class="btn primary">Start</button>
-          <button id="program-stop" class="btn hidden">Stopp</button>
-        </div>
-        <div id="program-status" class="prog-status hidden">
-          <button id="program-skip" class="btn ghost">Phase überspringen ⏭</button>
-        </div>
-      </div>
-    </section>
-  </section>
-
   <!-- Tab: Programme -->
   <section class="panel hidden" data-panel="programme">
     <section class="card">
@@ -121,6 +122,6 @@
   </section>
 
   <footer id="foot"></footer>
-  <script src="/static/app.js?v=19"></script>
+  <script src="/static/app.js?v=20"></script>
 </body>
 </html>

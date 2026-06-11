@@ -238,6 +238,10 @@ $("program-start").onclick = async () => { phaseTotal = null; render(await api("
 $("program-stop").onclick = async () => render(await api("/api/program/stop", null, "POST"));
 $("program-skip").onclick = async () => { phaseTotal = null; render(await api("/api/program/skip", null, "POST")); };
 $("fault-reset").onclick = async () => render(await api("/api/fault/clear", null, "POST"));
+$("sensors-read").onclick = async () => {
+  const b = $("sensors-read"); b.textContent = "…"; b.disabled = true;
+  try { render(await api("/api/sensors/read", null, "POST")); } finally { b.textContent = "↻ Werte holen"; b.disabled = false; }
+};
 
 // Tabs umschalten
 document.querySelectorAll(".ptab").forEach((b) =>

@@ -97,6 +97,7 @@ class ControlLoop:
         self._task: asyncio.Task | None = None
         self._wake = asyncio.Event()
         self._running = False
+        self._read_lock = asyncio.Lock()   # serialisiert Sensor-Reads
 
     # ---- Lifecycle -------------------------------------------------------
     async def start(self) -> None:
@@ -171,6 +172,10 @@ class ControlLoop:
 
     def _kick(self) -> None:
         self._wake.set()
+
+    async def read_once(self) -> None:
+        """Einmalige Sensor-Abfrage auf Knopfdruck (auch im Standby)."""
+        await self._read_sensors()
 
     # ---- Bedien-API ------------------------------------------------------
     def set_off(self) -> None:
@@ -260,7 +265,8 @@ class ControlLoop:
         if not points:
             return
         try:
-            vals = await self.hk.get_values(points)
+            async with self._read_lock:
+                vals = await self.hk.get_values(points)
             for aid, s in self.sensors.items():
                 for key, field in (("temp_iid", "temp"), ("hum_iid", "hum"), ("batt_iid", "batt")):
                     if s[key] and (aid, s[key]) in vals:

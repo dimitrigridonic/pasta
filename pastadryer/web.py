@@ -101,6 +101,11 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         loop.clear_fault()
         return loop.state()
 
+    @app.api_route("/api/sensors/read", methods=["GET", "POST"])
+    async def sensors_read():
+        await loop.read_once()
+        return loop.state()
+
     # --- Programm-Editor ---
     @app.get("/api/programs")
     async def programs_list():
