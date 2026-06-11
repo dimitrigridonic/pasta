@@ -81,8 +81,8 @@ function renderSensors(s) {
 }
 
 /* ---------- Trockner-Schema ---------- */
-// Sensor-Nummer -> Position [x,y] (Seitenansicht). Telai-Reihen y: 110..200.
-const DRYER_POS = { 6: [230, 315], 4: [320, 315], 5: [410, 315], 2: [230, 265], 1: [320, 265], 3: [410, 265] };
+// Sensor-Nummer -> Position [x,y] (Seitenansicht). Spalten links/mitte/rechts.
+const DRYER_POS = { 2: [240, 248], 1: [390, 248], 3: [540, 248], 6: [240, 332], 4: [390, 332], 5: [540, 332] };
 const sNum = (name) => { const m = String(name).match(/(\d+)/); return m ? +m[1] : null; };
 
 function renderDryer(s) {
@@ -96,20 +96,30 @@ function renderDryer(s) {
   const val = {}; s.sensors.forEach((se) => { const n = sNum(se.name); if (n) val[n] = se; });
 
   let telai = "";
-  [190, 215, 240, 265, 290, 315].forEach((y) => {
-    telai += `<rect x="175" y="${y - 2}" width="290" height="4" rx="2" fill="#2c2c34"/>`;
+  [192, 228, 264, 300, 336, 372].forEach((y) => {
+    telai += `<rect x="160" y="${y - 2}" width="460" height="4" rx="2" fill="#2c2c34"/>`;
   });
 
+  // Sensor-Kärtchen: Nummer, Temp, Feuchte + farbige Batterie
   let sensors = "";
   for (const n in DRYER_POS) {
     const [x, y] = DRYER_POS[n], se = val[n];
     const t = se && se.temp != null ? `${se.temp.toFixed(1)}°` : "–";
     const h = se && se.hum != null ? `${Math.round(se.hum)}%` : "";
+    let battFill = "#5a5a66", lvl = 0, battPct = "–";
+    if (se && se.batt != null) {
+      lvl = Math.max(0, Math.min(100, se.batt)); battPct = `${se.batt}%`;
+      battFill = se.batt >= 50 ? "#009353" : se.batt >= 20 ? "#e0a020" : "#e2433f";
+    }
     sensors += `<g>
-      <rect x="${x - 37}" y="${y - 15}" width="74" height="30" rx="9" fill="#17171c" stroke="#34343e"/>
-      <circle cx="${x - 25}" cy="${y}" r="4.5" fill="#009353"/>
-      <text x="${x - 14}" y="${y - 2}" class="dl-s" text-anchor="start">S${n}</text>
-      <text x="${x - 14}" y="${y + 10}" class="dl-v" text-anchor="start">${t} ${h}</text></g>`;
+      <rect x="${x - 61}" y="${y - 23}" width="122" height="46" rx="12" fill="#17171c" stroke="#34343e"/>
+      <circle cx="${x - 50}" cy="${y - 9}" r="4" fill="#009353"/>
+      <text x="${x - 41}" y="${y - 5}" class="dl-s" text-anchor="start">S${n}</text>
+      <text x="${x + 25}" y="${y - 5}" class="dl-b" text-anchor="end" fill="${battFill}">${battPct}</text>
+      <rect x="${x + 30}" y="${y - 15}" width="20" height="11" rx="2.5" fill="none" stroke="#6a6a76" stroke-width="1"/>
+      <rect x="${x + 31}" y="${y - 14}" width="${(18 * lvl / 100).toFixed(1)}" height="9" rx="1.5" fill="${battFill}"/>
+      <rect x="${x + 50}" y="${y - 12.5}" width="2.5" height="6" rx="1" fill="#6a6a76"/>
+      <text x="${x - 50}" y="${y + 15}" class="dl-v" text-anchor="start">${t}   ${h}</text></g>`;
   }
 
   const mod = (cx, isLeft) => {
@@ -128,19 +138,19 @@ function renderDryer(s) {
         <text x="${cx + 30}" y="84" text-anchor="middle" class="dl-m" fill="${fOn ? "#04121a" : "#5a6e78"}" style="pointer-events:none">FAN ${side}</text></g>`;
   };
 
-  const duct = "M 130 240 V 104 Q 130 80 154 80 H 486 Q 510 80 510 104 V 240";
-  const loop = "M 152 96 H 488 Q 510 96 510 118 V 350 Q 510 372 488 372 H 152 Q 130 372 130 350 V 118 Q 130 96 152 96 Z";
+  const duct = "M 150 240 V 104 Q 150 80 174 80 H 606 Q 630 80 630 104 V 240";
+  const loop = "M 174 96 H 606 Q 630 96 630 118 V 366 Q 630 388 606 388 H 174 Q 150 388 150 366 V 118 Q 150 96 174 96 Z";
 
-  box.innerHTML = `<svg viewBox="0 0 640 430" class="dryer-svg" xmlns="http://www.w3.org/2000/svg">
+  box.innerHTML = `<svg viewBox="0 0 780 425" class="dryer-svg" xmlns="http://www.w3.org/2000/svg">
     <defs><filter id="dglow" x="-60%" y="-60%" width="220%" height="220%">
       <feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-    <rect x="70" y="150" width="500" height="250" rx="16" fill="#101014" stroke="#2a2a30" stroke-width="1.5"/>
+    <rect x="90" y="150" width="600" height="258" rx="16" fill="#101014" stroke="#2a2a30" stroke-width="1.5"/>
     ${telai}
     <path d="${duct}" fill="none" stroke="#34343c" stroke-width="26" stroke-linecap="round"/>
     <path d="${duct}" fill="none" stroke="#101014" stroke-width="15" stroke-linecap="round"/>
     ${windOn ? `<path d="${loop}" class="dryer-flow ${windLeft ? "rev" : ""}"/>` : ""}
-    ${mod(200, true)}
-    ${mod(440, false)}
+    ${mod(210, true)}
+    ${mod(570, false)}
     ${sensors}
   </svg>`;
 }

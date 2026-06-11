@@ -150,8 +150,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 /* ---- Trockner-Schema ---- */
 #dryer { width: 100%; }
 .dryer-svg { width: 100%; height: auto; max-height: 88vh; display: block; }
-.dryer-svg .dl-s { fill: #fff; font: 700 11px system-ui; }
-.dryer-svg .dl-v { fill: #cfcfd6; font: 600 9px system-ui; }
+.dryer-svg .dl-s { fill: #fff; font: 700 12px system-ui; }
+.dryer-svg .dl-v { fill: #cfcfd6; font: 600 11px system-ui; }
+.dryer-svg .dl-b { font: 700 10px system-ui; }
 .dryer-svg .dl-c { fill: #8b8b93; font: 10px system-ui; }
 .dryer-svg .dl-m { font: 700 9px system-ui; letter-spacing: 0.02em; }
 .dryer-flow { fill: none; stroke: var(--cool); stroke-width: 2.5; stroke-dasharray: 6 8; opacity: .6; animation: dryerflow 1.4s linear infinite; }
