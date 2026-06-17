@@ -90,8 +90,7 @@ class Config:
     fan_stall_drop: float
     heater_max_on: float
     preheat_enabled: bool
-    preheat_target: float
-    preheat_max_min: float
+    preheat_min: float          # zeitbasiertes Vorheizen: feste Dauer in Minuten
     # Geräte
     heaters: list[Channel]
     fans: list[Channel]
@@ -140,8 +139,7 @@ class Config:
             fan_stall_drop=float(c.get("fan_stall_drop", 1.0)),
             heater_max_on=float(c.get("heater_max_on", 6)),
             preheat_enabled=bool(c.get("preheat_enabled", True)),
-            preheat_target=float(c.get("preheat_target", 30)),
-            preheat_max_min=float(c.get("preheat_max_min", 30)),
+            preheat_min=float(c.get("preheat_min", c.get("preheat_max_min", 15))),
             heaters=[Channel.parse(x) for x in raw.get("heaters", [])],
             fans=[Channel.parse(x) for x in raw.get("fans", [])],
             sensors=[SensorCfg.parse(x) for x in raw.get("sensors", [])],

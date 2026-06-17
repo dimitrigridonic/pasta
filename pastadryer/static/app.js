@@ -199,11 +199,12 @@ function render(s) {
   $("prog-empty").classList.toggle("hidden", running);
   if (running && s.preheating) {
     $("prog-name").textContent = `${s.program} — Vorheizen`;
-    let l = `🔥 Heizt leeren Kasten auf ${s.preheat.target}°C · aktuell ${fmt(s.agg_temp)}°C`;
-    if (s.preheat.remaining != null) l += ` · max noch ${dur(s.preheat.remaining)}`;
+    let l = `🔥 Beide Heizungen volle Leistung (leerer Kasten)`;
+    if (s.preheat.remaining != null) l += ` · noch ${dur(s.preheat.remaining)}`;
     l += ` · dann Pasta einstellen`;
     $("prog-phase").textContent = l;
-    const pct = s.agg_temp != null ? Math.min(100, Math.max(0, (s.agg_temp - 20) / (s.preheat.target - 20) * 100)) : 0;
+    const tot = s.preheat.total_min ? s.preheat.total_min * 60 : null;
+    const pct = (tot && s.preheat.remaining != null) ? Math.min(100, Math.max(0, (1 - s.preheat.remaining / tot) * 100)) : 0;
     $("prog-bar-fill").style.width = `${pct}%`;
     phaseTotal = null;
   } else if (running) {

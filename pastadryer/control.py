@@ -381,25 +381,24 @@ class ControlLoop:
                 self.desired[ch.point()] = False
 
     def _decide_preheat(self) -> None:
-        """Vorheizen bei LEEREM Kasten: BEIDE Heizungen gleichzeitig -> schneller auf
-        Zieltemperatur. Abwechseln erst im Programm (wenn die Pasta drin ist)."""
-        target = self.cfg.preheat_target
-        t = self.agg_temp
+        """Vorheizen bei LEEREM Kasten, ZEITBASIERT (kein Sensor im Kasten):
+        BEIDE Heizungen volle Leistung für preheat_min Minuten, dann Programmstart.
+        Begrenzt rein über die Zeit. Falls trotzdem ein Sensor im Kasten ist, greift
+        die max_temp-Abschaltung in _decide zusätzlich."""
         elapsed = time.monotonic() - (self._preheat_started or time.monotonic())
-        if (t is not None and t >= target) or elapsed >= self.cfg.preheat_max_min * 60:
+        if elapsed >= self.cfg.preheat_min * 60:
             self.preheating = False
             self.phase_index = 0
             self._phase_started = time.monotonic()
-            self.active_side = 0                       # Programm startet sauber links
+            self.active_side = 0                        # Programm startet sauber links
             self._fan_cycle_started = time.monotonic()  # voller erster Seiten-Takt
-            log.info("Vorheizen fertig (%.1f°C / %.0f min) -> Programm startet",
-                     t if t is not None else -1, elapsed / 60)
+            log.info("Vorheizen fertig (zeitbasiert, %.0f min) -> Programm startet", elapsed / 60)
             return
-        self.heater_on = (t is None) or (t < target)
+        self.heater_on = True
         self.venting = False
         # leerer Kasten -> beide Heizungen an (kein Wechsel)
         for hch in self.cfg.heaters:
-            self.desired[hch.point()] = self.heater_on
+            self.desired[hch.point()] = True
         for f in self.cfg.fans:
             self.desired[f.point()] = False
 
@@ -607,8 +606,8 @@ class ControlLoop:
             "program": self.program.name if self.program else None,
             "preheating": self.preheating,
             "preheat": ({
-                "target": self.cfg.preheat_target,
-                "remaining": (max(0, int(self.cfg.preheat_max_min * 60
+                "total_min": self.cfg.preheat_min,
+                "remaining": (max(0, int(self.cfg.preheat_min * 60
                               - (time.monotonic() - self._preheat_started)))
                               if self._preheat_started else None),
             } if self.preheating else None),

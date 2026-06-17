@@ -24,8 +24,9 @@ control:
   fan_stall_drop: 1.0        # … und dabei < diesem Abfall (%-Punkte)
   heater_max_on: 6           # SICHERHEIT: Heizung-Dauerlauf > X Min -> verriegelnder Not-Aus
   preheat_enabled: true      # Vorheizen (leerer Kasten) vor dem Programm
-  preheat_target: 30         # Vorheiz-Zieltemperatur (°C)
-  preheat_max_min: 30        # … maximal so lange vorheizen (Min)
+  preheat_min: 15            # ZEITBASIERT: beide Heizungen volle Leistung so lange (Min),
+                             # dann Programmstart. Kein Sensor im Kasten -> rein über Zeit.
+                             # Startwert; mit beiden Heizungen heizt es schneller -> kalibrieren.
   side_bias_min: 2.5         # ab dieser Feuchte-Differenz L/R (%rF) wird die feuchtere Seite geheizt
                              # (statt stur abzuwechseln); darunter normaler Seitenwechsel im Takt
 
