@@ -54,6 +54,12 @@ sides:
   left:  ["Sensor 2", "Sensor 6"]
   right: ["Sensor 3", "Sensor 5"]
 
+# Feuchte-Referenz: an diesen Leit-Sensoren orientiert sich die Regelung (Ideallinie/Ruhephase).
+# Leer = Schnitt ALLER Sensoren. Die untere Reihe (6,4,5) trocknet zuerst -> dort orientieren,
+# damit unten nicht übertrocknet, während der Gesamtschnitt noch ok aussieht.
+# Im UI live umschaltbar (Alle ⌀ <-> Untere).
+humidity_guide: ["Sensor 6", "Sensor 4", "Sensor 5"]
+
 logging:
   enabled: true
   file: history.db

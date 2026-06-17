@@ -33,6 +33,16 @@ class NudgeReq(BaseModel):
     delta: float
 
 
+class HumRefReq(BaseModel):
+    mode: str
+
+
+class ResumeReq(BaseModel):
+    name: str
+    phase_index: int = 0
+    elapsed_s: float = 0
+
+
 class ProgramBody(BaseModel):
     name: str
     phases: list[dict]
@@ -108,6 +118,17 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
     @app.post("/api/program/nudge")
     async def program_nudge(req: NudgeReq):
         loop.nudge_humidity(req.delta)
+        return loop.state()
+
+    @app.post("/api/humref")
+    async def set_humref(req: HumRefReq):
+        loop.set_hum_ref(req.mode)
+        return loop.state()
+
+    @app.post("/api/program/resume")
+    async def program_resume(req: ResumeReq):
+        if not loop.resume_program(req.name, req.phase_index, req.elapsed_s):
+            return JSONResponse({"error": "Wiederaufnahme fehlgeschlagen"}, status_code=400)
         return loop.state()
 
     @app.api_route("/api/fault/clear", methods=["GET", "POST"])

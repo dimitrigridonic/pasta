@@ -71,6 +71,9 @@ class ControlLoop:
         self._preheat_started: float | None = None
         self.humidity_target: float | None = None
         self.humidity_trim = 0.0   # Live-Versatz auf das Feuchte-Ziel (− = schneller, + = sanfter)
+        # Feuchte-Referenz: "all" = Schnitt aller Sensoren, "guide" = nur Leit-Sensoren
+        # (z.B. untere Reihe, die zuerst übertrocknet). Live umschaltbar.
+        self.hum_ref = "guide" if cfg.humidity_guide else "all"
         self.safety_tripped = False
         self.last_error: str | None = None
         self._last_log = 0.0
@@ -232,6 +235,39 @@ class ControlLoop:
                 self._advance_phase(force=True)
             self._kick()
 
+    def set_hum_ref(self, mode: str) -> None:
+        """Feuchte-Referenz live umschalten: 'all' (Schnitt) | 'guide' (Leit-Sensoren)."""
+        if mode in ("all", "guide"):
+            self.hum_ref = mode
+            log.info("Feuchte-Referenz jetzt: %s", mode)
+            self._kick()
+
+    def resume_program(self, name: str, phase_index: int, elapsed_s: float) -> bool:
+        """Laufenden Lauf nach einem Neustart wiederaufnehmen (OHNE Vorheizen):
+        Phase + bereits verstrichene Zeit in der Phase wiederherstellen."""
+        if self.fault:
+            return False
+        prog = self.store.get(name)
+        if prog is None:
+            return False
+        self.program = prog
+        self.phase_index = max(0, min(int(phase_index), len(prog.phases) - 1))
+        nowm = time.monotonic()
+        self._phase_started = nowm - max(0.0, float(elapsed_s))
+        prior = sum((p.duration_h or 0) for p in prog.phases[:self.phase_index]) * 3600 + max(0.0, float(elapsed_s))
+        self._program_started = time.time() - prior
+        self.mode = "program"
+        self.preheating = False
+        self.resting = False
+        self.humidity_trim = 0.0
+        self._hum_hist.clear()
+        self.active_side = 0
+        self._fan_cycle_started = nowm
+        log.info("Programm '%s' wiederaufgenommen: Phase %d, %.0f min in der Phase",
+                 name, self.phase_index, float(elapsed_s) / 60)
+        self._kick()
+        return True
+
     # ---- Hauptschleife ---------------------------------------------------
     async def _run(self) -> None:
         log.info("Control-Loop gestartet (Intervall %ss)", self.cfg.poll_interval)
@@ -284,7 +320,12 @@ class ControlLoop:
 
     def _aggregate(self) -> None:
         temps = [s["temp"] for s in self.sensors.values() if s["temp"] is not None]
-        hums = [s["hum"] for s in self.sensors.values() if s["hum"] is not None]
+        # Feuchte-Referenz: alle Sensoren ODER nur die Leit-Sensoren (z.B. untere Reihe)
+        if self.hum_ref == "guide" and self.cfg.humidity_guide:
+            names = [n for n in self.cfg.humidity_guide if n in self.sensors]
+            hums = [self.sensors[n]["hum"] for n in names if self.sensors[n]["hum"] is not None]
+        else:
+            hums = [s["hum"] for s in self.sensors.values() if s["hum"] is not None]
         self.max_temp_seen = max(temps) if temps else None
 
         def agg(vals):
@@ -618,6 +659,8 @@ class ControlLoop:
             "heater_max_on": self.cfg.heater_max_on,
             "program": self.program.name if self.program else None,
             "humidity_trim": round(self.humidity_trim, 1),
+            "hum_ref": self.hum_ref,
+            "humidity_guide": self.cfg.humidity_guide,
             "preheating": self.preheating,
             "preheat": ({
                 "total_min": self.cfg.preheat_min,

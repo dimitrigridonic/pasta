@@ -103,6 +103,7 @@ class Config:
     sides_left: list[str] = field(default_factory=list)
     sides_right: list[str] = field(default_factory=list)
     side_bias_min: float = 2.5   # ab dieser Feuchte-Differenz (%rF) wird die feuchtere Seite bevorzugt
+    humidity_guide: list[str] = field(default_factory=list)  # Leit-Sensoren für die Feuchte-Referenz (leer = alle)
     # Programme
     programs: list[Program] = field(default_factory=list)
 
@@ -149,5 +150,6 @@ class Config:
             sides_left=[str(x) for x in (sides.get("left") or [])],
             sides_right=[str(x) for x in (sides.get("right") or [])],
             side_bias_min=float(c.get("side_bias_min", 2.5)),
+            humidity_guide=[str(x) for x in (raw.get("humidity_guide") or [])],
             programs=[Program.parse(p) for p in raw.get("programs", [])],
         )

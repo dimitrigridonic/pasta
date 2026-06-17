@@ -225,6 +225,13 @@ function render(s) {
   const tr = s.humidity_trim || 0;
   $("nudge-val").textContent = tr === 0 ? "normal" : (tr < 0 ? `${tr} % · schneller` : `+${tr} % · sanfter`);
 
+  const hr = s.hum_ref || "all";
+  const guideNums = (s.humidity_guide || []).map((n) => (String(n).match(/\d+/) || [])[0]).filter(Boolean).join("·");
+  $("href-all").classList.toggle("active", hr === "all");
+  $("href-guide").classList.toggle("active", hr === "guide");
+  $("href-guide").textContent = guideNums ? `Untere ${guideNums}` : "Untere";
+  $("href-val").textContent = hr === "guide" ? "Bezug: untere Reihe" : "Bezug: Schnitt aller";
+
   renderSensors(s);
   renderDryer(s);
 
@@ -263,6 +270,8 @@ $("program-stop").onclick = async () => render(await api("/api/program/stop", nu
 $("program-skip").onclick = async () => { phaseTotal = null; render(await api("/api/program/skip", null, "POST")); };
 $("nudge-faster").onclick = async () => render(await api("/api/program/nudge", { delta: -1 }));
 $("nudge-slower").onclick = async () => render(await api("/api/program/nudge", { delta: 1 }));
+$("href-all").onclick = async () => render(await api("/api/humref", { mode: "all" }));
+$("href-guide").onclick = async () => render(await api("/api/humref", { mode: "guide" }));
 $("program-select").onchange = () => drawChart();
 $("fault-reset").onclick = async () => render(await api("/api/fault/clear", null, "POST"));
 $("sensors-read").onclick = async () => {
