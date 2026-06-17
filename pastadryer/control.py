@@ -544,7 +544,8 @@ class ControlLoop:
         now = time.time()
         if now - self._last_log >= self.cfg.log_interval:
             self._last_log = now
-            self.history.log(now, self.sensors)
+            prog = self.program.name if self.program else None
+            self.history.log(now, self.sensors, prog=prog, target=self.humidity_target)
 
     # ---- Status für Web --------------------------------------------------
     def state(self) -> dict:

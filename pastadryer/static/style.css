@@ -130,7 +130,8 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .sensor .svals .sbatt { margin-left: auto; font-size: 0.6rem; color: var(--muted); font-weight: 400; }
 
 /* ---- Chart ---- */
-#hist-canvas { width: 100%; height: clamp(180px, 26vw, 320px); background: var(--surface-2); border-radius: 0.7rem; display: block; }
+#hist-canvas, #run-canvas { width: 100%; height: clamp(180px, 26vw, 320px); background: var(--surface-2); border-radius: 0.7rem; display: block; }
+#run-canvas { height: clamp(240px, 40vw, 440px); }
 .chart-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
 .chart-controls select { width: auto; }
 .legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; font-size: 0.72rem; color: var(--muted); margin-top: 0.6rem; }

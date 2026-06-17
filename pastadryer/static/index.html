@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
-  <link rel="stylesheet" href="/static/style.css?v=25" />
+  <link rel="stylesheet" href="/static/style.css?v=26" />
 </head>
 <body>
   <header class="topbar">
@@ -24,6 +24,7 @@
   <nav class="tabs">
     <button class="ptab active" data-ptab="home">Home</button>
     <button class="ptab" data-ptab="trockner">Trockner</button>
+    <button class="ptab" data-ptab="analyse">Analyse</button>
     <button class="ptab" data-ptab="programme">Programme</button>
   </nav>
 
@@ -105,6 +106,24 @@
     </section>
   </section>
 
+  <!-- Tab: Analyse -->
+  <section class="panel hidden" data-panel="analyse">
+    <section class="card span-all">
+      <div class="card-head">
+        <h2>Analyse <small id="run-stat"></small></h2>
+        <div class="chart-controls">
+          <select id="run-select"></select>
+          <button id="run-metric" class="btn ghost sm">Temp zeigen</button>
+          <button id="run-lines" class="btn ghost sm">Sensoren zeigen</button>
+          <a id="run-csv" class="btn ghost sm" href="#" download>CSV</a>
+        </div>
+      </div>
+      <canvas id="run-canvas"></canvas>
+      <div id="run-legend" class="legend"></div>
+      <div id="run-empty" class="cp-empty hidden">Noch keine aufgezeichneten Durchgänge. Sobald ein Programm läuft, werden die Kurven hier gespeichert.</div>
+    </section>
+  </section>
+
   <!-- Tab: Programme -->
   <section class="panel hidden" data-panel="programme">
     <section class="card">
@@ -117,6 +136,6 @@
   </section>
 
   <footer id="foot"></footer>
-  <script src="/static/app.js?v=25"></script>
+  <script src="/static/app.js?v=26"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 let state = null, view = null, phaseTotal = null;
 let histMetric = "hum", lastHist = null, allPrograms = [];
+let runMetric = "hum", runShowSensors = false, runData = null, runNames = {}, runsLoaded = false;
 
 function progPhases(name) {
   const p = allPrograms.find((x) => x.name === name);
@@ -275,6 +276,7 @@ document.querySelectorAll(".ptab").forEach((b) =>
     document.querySelectorAll(".ptab").forEach((x) => x.classList.toggle("active", x === b));
     document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== t));
     drawChart();
+    if (t === "analyse") loadRuns();
   })
 );
 
@@ -337,6 +339,82 @@ $("hist-refresh").onclick = () => drawChart();
 $("hist-csv").href = "/api/history.csv?hours=100000";
 $("hist-clear").onclick = async () => { if (confirm("Aufgezeichnete Sensordaten (CSV) löschen?")) await api("/api/history/clear", {}); };
 window.addEventListener("resize", () => drawChart());
+
+/* ---------- Analyse: vergangene Durchgänge (echte aufgezeichnete Kurven) ---------- */
+const fmtRunLabel = (r) => {
+  const d = new Date(r.start * 1000);
+  const dur = (r.end - r.start) / 3600;
+  const date = d.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return `${date} · ${dur < 1 ? Math.round(dur * 60) + " min" : dur.toFixed(1) + " h"}${r.prog ? " · " + r.prog : ""}`;
+};
+async function loadRuns() {
+  const data = await api("/api/runs");
+  runNames = data.names || {};
+  const runs = data.runs || [];
+  const sel = $("run-select");
+  $("run-empty").classList.toggle("hidden", runs.length > 0);
+  $("run-canvas").classList.toggle("hidden", runs.length === 0);
+  if (!runs.length) { sel.innerHTML = ""; $("run-stat").textContent = ""; $("run-legend").innerHTML = ""; return; }
+  const prevIdx = (sel._runs && sel.value && sel._runs[+sel.value]) ? +sel.value : 0;
+  sel.innerHTML = runs.map((r, i) => `<option value="${i}">${fmtRunLabel(r)}</option>`).join("");
+  sel._runs = runs;
+  sel.value = String(Math.min(prevIdx, runs.length - 1));
+  runsLoaded = true;
+  await loadRun(runs[+sel.value]);
+}
+async function loadRun(r) {
+  if (!r) return;
+  runData = await api(`/api/run?start=${r.start}&end=${r.end}`);
+  $("run-csv").href = `/api/history.csv?start=${r.start}&end=${r.end}`;
+  drawRunChart();
+}
+$("run-select").onchange = () => { const sel = $("run-select"); loadRun(sel._runs[+sel.value]); };
+$("run-metric").onclick = () => { runMetric = runMetric === "hum" ? "temp" : "hum"; $("run-metric").textContent = runMetric === "hum" ? "Temp zeigen" : "Feuchte zeigen"; drawRunChart(); };
+$("run-lines").onclick = () => { runShowSensors = !runShowSensors; $("run-lines").textContent = runShowSensors ? "Sensoren aus" : "Sensoren zeigen"; drawRunChart(); };
+window.addEventListener("resize", () => { if (runData) drawRunChart(); });
+
+function drawRunChart() {
+  const cv = $("run-canvas"); if (!cv || !cv.clientWidth || !runData) return;
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const padL = 38, padR = 12, padT = 12, padB = 24;
+  ctx.font = "11px system-ui";
+  const agg = runData.agg || [];
+  if (!agg.length) { ctx.fillStyle = "#8b8b93"; ctx.fillText("keine Daten", padL, H / 2); $("run-legend").innerHTML = ""; return; }
+  const t0 = runData.start, span = Math.max(1 / 60, (runData.end - t0) / 3600);
+  const isHum = runMetric === "hum", vi = isHum ? 2 : 1, unit = isHum ? "%" : "°";
+  let vmin = Infinity, vmax = -Infinity;
+  const consider = (v) => { if (v != null) { if (v < vmin) vmin = v; if (v > vmax) vmax = v; } };
+  agg.forEach((p) => { consider(p[vi]); if (isHum) consider(p[3]); });
+  if (runShowSensors) for (const a in runData.sensors) runData.sensors[a].forEach((p) => consider(p[vi]));
+  if (!isFinite(vmin)) { vmin = isHum ? 40 : 20; vmax = isHum ? 90 : 40; }
+  vmin = Math.floor(vmin - 2); vmax = Math.ceil(vmax + 2);
+  const X = (ts) => padL + ((ts - t0) / 3600 / span) * (W - padL - padR);
+  const Y = (v) => H - padB - (v - vmin) / (vmax - vmin) * (H - padT - padB);
+  ctx.strokeStyle = "#26262b"; ctx.lineWidth = 1;
+  for (let g = 0; g <= 4; g++) { const v = vmin + (vmax - vmin) * g / 4, y = Y(v); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke(); ctx.fillStyle = "#8b8b93"; ctx.fillText(v.toFixed(0) + unit, 2, y + 4); }
+  for (let g = 0; g <= 4; g++) { const h = span * g / 4; ctx.fillStyle = "#8b8b93"; ctx.fillText(h.toFixed(h < 4 ? 1 : 0) + "h", X(t0 + h * 3600) - 6, H - 6); }
+  if (!isHum && state) { const yb = Y(state.temp_high), yb2 = Y(state.temp_low); ctx.fillStyle = "rgba(0,147,83,0.10)"; ctx.fillRect(padL, yb, W - padL - padR, yb2 - yb); }
+  let legend = "";
+  const drawLine = (pts, idx, color, width, alpha, dash) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = alpha; ctx.setLineDash(dash || []); ctx.beginPath();
+    let st = false;
+    pts.forEach((p) => { if (p[idx] == null) return; const x = X(p[0]), y = Y(p[idx]); st ? ctx.lineTo(x, y) : ctx.moveTo(x, y); st = true; });
+    ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]);
+  };
+  if (runShowSensors) {
+    const cols = ["#7aa2f7", "#bb9af7", "#7dcfff", "#e0af68", "#9ece6a", "#f7768e"]; let i = 0;
+    for (const a in runData.sensors) { const col = cols[i % cols.length]; i++; drawLine(runData.sensors[a], vi, col, 1, 0.7); legend += `<span><i style="background:${col}"></i>${runNames[a] || a}</span>`; }
+  }
+  if (isHum && agg.some((p) => p[3] != null)) { drawLine(agg, 3, "#fff", 1.5, 1, [6, 4]); legend = `<span><i style="background:#fff"></i>Ideallinie</span>` + legend; }
+  drawLine(agg, vi, isHum ? "#009353" : "#ff7a59", 2.4, 1);
+  legend = `<span><i style="background:${isHum ? "#009353" : "#ff7a59"}"></i>${isHum ? "Feuchte ⌀" : "Temp ⌀"}</span>` + legend;
+  $("run-legend").innerHTML = legend;
+  const first = agg.find((p) => p[vi] != null), last = [...agg].reverse().find((p) => p[vi] != null);
+  const sub = first && last ? `${first[vi].toFixed(isHum ? 0 : 1)}${unit} → ${last[vi].toFixed(isHum ? 0 : 1)}${unit}` : "";
+  $("run-stat").textContent = `· ${span < 1 ? Math.round(span * 60) + " min" : span.toFixed(1) + " h"} · ${sub}`;
+}
 
 /* ---------- Programm-Editor ---------- */
 function phaseRow(ph = {}) {

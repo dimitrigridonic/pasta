@@ -139,11 +139,26 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         names = {aid: s["name"] for aid, s in loop.sensors.items()}
         return {"names": names, "series": history.series(since)}
 
+    # --- Analyse: vergangene Durchgänge ---
+    @app.get("/api/runs")
+    async def get_runs():
+        names = {aid: s["name"] for aid, s in loop.sensors.items()}
+        return {"names": names, "runs": history.runs()}
+
+    @app.get("/api/run")
+    async def get_run(start: float, end: float):
+        names = {aid: s["name"] for aid, s in loop.sensors.items()}
+        return {"names": names, **history.run_series(start, end)}
+
     @app.get("/api/history.csv")
-    async def get_history_csv(hours: float = 72):
-        since = time.time() - hours * 3600
+    async def get_history_csv(hours: float = 72, start: float | None = None,
+                              end: float | None = None):
+        if start is not None or end is not None:
+            data = history.csv(start, end)
+        else:
+            data = history.csv(time.time() - hours * 3600)
         return PlainTextResponse(
-            history.csv(since),
+            data,
             headers={"Content-Disposition": "attachment; filename=pasta-history.csv"},
         )
 
