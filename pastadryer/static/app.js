@@ -236,10 +236,13 @@ function render(s) {
   else banner.classList.add("hidden");
 
   const conn = $("conn"), age = s.reading_age;
-  if (!s.sensors_active) { conn.textContent = "Sensoren im Standby (Batterie sparen)"; conn.classList.remove("stale"); }
-  else if (!s.reading_ok || (age != null && age > 90)) { conn.textContent = "⚠ Messwerte alt"; conn.classList.add("stale"); }
-  else { conn.textContent = `aktuell (${age != null ? Math.round(age) : "?"}s)`; conn.classList.remove("stale"); }
-  $("foot").textContent = "Pasta-Trockner · Aqara M2 · lokal";
+  const humanAge = (a) => a == null ? "?" : a < 90 ? `${Math.round(a)}s` : a < 5400 ? `${Math.round(a / 60)} min` : `${(a / 3600).toFixed(1)} h`;
+  if (s.mqtt_connected === false) { conn.textContent = "⚠ keine Verbindung"; conn.classList.add("stale"); }
+  else if (!s.reading_ok) { conn.textContent = "warte auf Werte…"; conn.classList.remove("stale"); }
+  // Push-basiert: Sensoren senden nur bei Änderung. „Lange still" erst nach >75 Min (Heartbeat).
+  else if (age != null && age > 4500) { conn.textContent = `⚠ Sensoren lange still (${humanAge(age)})`; conn.classList.add("stale"); }
+  else { conn.textContent = `Push · letzter Wert vor ${humanAge(age)}`; conn.classList.remove("stale"); }
+  $("foot").textContent = "Pasta-Trockner · Zigbee (zigbee2mqtt) · Push, lokal";
   drawChart();
 }
 

@@ -589,7 +589,10 @@ class ControlLoop:
             "fans": [{"name": f.name, "on": self.desired.get(f.point(), False),
                       "aid": f.aid, "iid": f.iid} for f in self.cfg.fans],
             "reading_ok": self.last_reading_ok,
-            "reading_age": (time.time() - self.last_reading_at) if self.last_reading_at else None,
+            # Alter des FRISCHESTEN Sensor-Push (echte Push-Zeit, KEINE Abfrage).
+            "reading_age": min([a for a in (self.zb.age(n) for n in self.sensors)
+                                if a is not None], default=None),
+            "mqtt_connected": self.zb.connected,
             "sensors_active": True,
             "safety_tripped": self.safety_tripped,
             "fault": self.fault,

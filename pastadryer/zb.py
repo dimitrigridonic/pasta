@@ -72,6 +72,10 @@ class Zigbee:
             if self._running:
                 await asyncio.sleep(5)
 
+    @property
+    def connected(self) -> bool:
+        return self._connected.is_set()
+
     # ---- Lesen (aus dem Push-Cache) ----
     def get(self, friendly_name: str) -> dict:
         return self.cache.get(friendly_name) or {}
