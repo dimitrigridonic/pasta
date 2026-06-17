@@ -29,6 +29,10 @@ class ProgReq(BaseModel):
     name: str
 
 
+class NudgeReq(BaseModel):
+    delta: float
+
+
 class ProgramBody(BaseModel):
     name: str
     phases: list[dict]
@@ -99,6 +103,11 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
     @app.api_route("/api/program/skip", methods=["GET", "POST"])
     async def program_skip():
         loop.skip_phase()
+        return loop.state()
+
+    @app.post("/api/program/nudge")
+    async def program_nudge(req: NudgeReq):
+        loop.nudge_humidity(req.delta)
         return loop.state()
 
     @app.api_route("/api/fault/clear", methods=["GET", "POST"])

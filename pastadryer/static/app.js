@@ -222,6 +222,9 @@ function render(s) {
     }
   } else phaseTotal = null;
 
+  const tr = s.humidity_trim || 0;
+  $("nudge-val").textContent = tr === 0 ? "normal" : (tr < 0 ? `${tr} % · schneller` : `+${tr} % · sanfter`);
+
   renderSensors(s);
   renderDryer(s);
 
@@ -258,6 +261,8 @@ document.querySelectorAll(".mode").forEach((b) =>
 $("program-start").onclick = async () => { phaseTotal = null; render(await api("/api/program/start", { name: $("program-select").value })); };
 $("program-stop").onclick = async () => render(await api("/api/program/stop", null, "POST"));
 $("program-skip").onclick = async () => { phaseTotal = null; render(await api("/api/program/skip", null, "POST")); };
+$("nudge-faster").onclick = async () => render(await api("/api/program/nudge", { delta: -1 }));
+$("nudge-slower").onclick = async () => render(await api("/api/program/nudge", { delta: 1 }));
 $("program-select").onchange = () => drawChart();
 $("fault-reset").onclick = async () => render(await api("/api/fault/clear", null, "POST"));
 $("sensors-read").onclick = async () => {

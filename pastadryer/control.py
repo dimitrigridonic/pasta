@@ -70,6 +70,7 @@ class ControlLoop:
         self.preheating = False          # Vorheizphase (leerer Kasten)
         self._preheat_started: float | None = None
         self.humidity_target: float | None = None
+        self.humidity_trim = 0.0   # Live-Versatz auf das Feuchte-Ziel (− = schneller, + = sanfter)
         self.safety_tripped = False
         self.last_error: str | None = None
         self._last_log = 0.0
@@ -205,11 +206,21 @@ class ControlLoop:
         self._program_started = time.time()
         self.mode = "program"
         self.resting = False
+        self.humidity_trim = 0.0
         self._hum_hist.clear()
         self.preheating = self.cfg.preheat_enabled
         self._preheat_started = time.monotonic()
         self._kick()
         return True
+
+    def nudge_humidity(self, delta: float) -> None:
+        """Live-Versatz auf das Feuchte-Ziel (− = schneller trocknen, + = sanfter).
+        Gilt für den Rest des Laufs; clamped auf ±15 %."""
+        if self.mode != "program":
+            return
+        self.humidity_trim = round(max(-15.0, min(15.0, self.humidity_trim + delta)), 1)
+        log.info("Feuchte-Ziel-Versatz jetzt %+.0f%%", self.humidity_trim)
+        self._kick()
 
     def skip_phase(self) -> None:
         if self.mode == "program" and self.program:
@@ -416,6 +427,8 @@ class ControlLoop:
 
         # --- Ideallinie der Phase (Rampe). Die Feuchte soll ihr FOLGEN, nie drunter. ---
         self.humidity_target = self._current_humidity_target(phase)
+        if self.humidity_target is not None and self.humidity_trim:
+            self.humidity_target = round(min(95.0, max(20.0, self.humidity_target + self.humidity_trim)), 1)
         floor = self.humidity_target
         low = phase.temp_low if phase.temp_low is not None else self.cfg.temp_low
         high = phase.temp_high if phase.temp_high is not None else self.cfg.temp_high
@@ -604,6 +617,7 @@ class ControlLoop:
             "max_temp": self.cfg.max_temp,
             "heater_max_on": self.cfg.heater_max_on,
             "program": self.program.name if self.program else None,
+            "humidity_trim": round(self.humidity_trim, 1),
             "preheating": self.preheating,
             "preheat": ({
                 "total_min": self.cfg.preheat_min,

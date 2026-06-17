@@ -134,6 +134,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 #run-canvas { height: clamp(240px, 40vw, 440px); }
 .chart-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
 .chart-controls select { width: auto; }
+.nudge { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.nudge-cap { color: #8b8b93; font-size: 0.85rem; }
+.nudge-val { min-width: 6.2rem; text-align: center; font-weight: 600; font-size: 0.85rem; color: var(--accent); }
 .legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; font-size: 0.72rem; color: var(--muted); margin-top: 0.6rem; }
 .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
 .legend i { width: 0.9rem; height: 0.2rem; border-radius: 2px; display: inline-block; }

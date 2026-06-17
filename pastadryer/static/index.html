@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
-  <link rel="stylesheet" href="/static/style.css?v=28" />
+  <link rel="stylesheet" href="/static/style.css?v=29" />
 </head>
 <body>
   <header class="topbar">
@@ -74,6 +74,12 @@
             <button id="program-stop" class="btn hidden">Stopp</button>
           </div>
           <div id="program-status" class="prog-status hidden">
+            <div class="nudge">
+              <span class="nudge-cap">Trocknung</span>
+              <button id="nudge-faster" class="btn ghost sm">▼ schneller</button>
+              <span id="nudge-val" class="nudge-val">normal</span>
+              <button id="nudge-slower" class="btn ghost sm">langsamer ▲</button>
+            </div>
             <button id="program-skip" class="btn ghost">Phase überspringen ⏭</button>
           </div>
         </div>
@@ -136,6 +142,6 @@
   </section>
 
   <footer id="foot"></footer>
-  <script src="/static/app.js?v=28"></script>
+  <script src="/static/app.js?v=29"></script>
 </body>
 </html>
