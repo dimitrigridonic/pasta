@@ -356,15 +356,20 @@ class ControlLoop:
 
         # Sicherheit 2: Heizung-Dauerlauf-Wächter (VERRIEGELND) — läuft eine Heizung
         # länger als heater_max_on am Stück, ist etwas defekt -> Not-Aus, bleibt aus.
+        # Beim Vorheizen pausiert: beide Heizungen laufen absichtlich durch (leerer
+        # Kasten), abgesichert über max_temp-Hartabschaltung + preheat_max_min.
         nowm = time.monotonic()
-        for hch in self.cfg.heaters:
-            p = hch.point()
-            if self.desired.get(p):
-                self._heater_on_since.setdefault(p, nowm)
-                if nowm - self._heater_on_since[p] > self.cfg.heater_max_on * 60:
-                    self._trip_fault(f"{hch.name} lief länger als {self.cfg.heater_max_on:.0f} min am Stück")
-            else:
-                self._heater_on_since.pop(p, None)
+        if self.preheating:
+            self._heater_on_since.clear()
+        else:
+            for hch in self.cfg.heaters:
+                p = hch.point()
+                if self.desired.get(p):
+                    self._heater_on_since.setdefault(p, nowm)
+                    if nowm - self._heater_on_since[p] > self.cfg.heater_max_on * 60:
+                        self._trip_fault(f"{hch.name} lief länger als {self.cfg.heater_max_on:.0f} min am Stück")
+                else:
+                    self._heater_on_since.pop(p, None)
 
         if self.fault:   # verriegelt: alles aus, Programm gestoppt, bleibt aus
             self.mode = "off"
@@ -376,7 +381,8 @@ class ControlLoop:
                 self.desired[ch.point()] = False
 
     def _decide_preheat(self) -> None:
-        """Vorheizen bei leerem Kasten: bis Zieltemperatur heizen (Seiten wechseln)."""
+        """Vorheizen bei LEEREM Kasten: BEIDE Heizungen gleichzeitig -> schneller auf
+        Zieltemperatur. Abwechseln erst im Programm (wenn die Pasta drin ist)."""
         target = self.cfg.preheat_target
         t = self.agg_temp
         elapsed = time.monotonic() - (self._preheat_started or time.monotonic())
@@ -384,17 +390,16 @@ class ControlLoop:
             self.preheating = False
             self.phase_index = 0
             self._phase_started = time.monotonic()
+            self.active_side = 0                       # Programm startet sauber links
+            self._fan_cycle_started = time.monotonic()  # voller erster Seiten-Takt
             log.info("Vorheizen fertig (%.1f°C / %.0f min) -> Programm startet",
                      t if t is not None else -1, elapsed / 60)
             return
         self.heater_on = (t is None) or (t < target)
         self.venting = False
-        n = max(len(self.cfg.heaters), 1)
-        if time.monotonic() - self._fan_cycle_started >= self.cfg.fan_cycle_min * 60:
-            self.active_side = (self.active_side + 1) % n
-            self._fan_cycle_started = time.monotonic()
-        for i, hch in enumerate(self.cfg.heaters):
-            self.desired[hch.point()] = self.heater_on and (i == self.active_side)
+        # leerer Kasten -> beide Heizungen an (kein Wechsel)
+        for hch in self.cfg.heaters:
+            self.desired[hch.point()] = self.heater_on
         for f in self.cfg.fans:
             self.desired[f.point()] = False
 
