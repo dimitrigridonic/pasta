@@ -372,12 +372,16 @@ class ControlLoop:
         n = max(len(self.cfg.heaters), len(self.cfg.fans), 1)
         if n < 2:
             return 0
+        # SICHERHEIT zuerst: nie länger als fan_cycle_min am Stück auf derselben Seite,
+        # sonst läuft eine Heizung über den Dauerlauf-Wächter (heater_max_on). Diese
+        # Zwangs-Abwechslung hat Vorrang vor der Feuchte-Präferenz. Die trockene Seite
+        # wird dabei trotzdem nicht geheizt – das Feuchte-Gate in _decide_program lässt
+        # sie aus, sodass die feuchtere Seite nur kurz pausiert statt durchzulaufen.
+        if nowm - self._fan_cycle_started >= self.cfg.fan_cycle_min * 60:
+            return (prev_side + 1) % n
         hl, hr = self._side_hum(0), self._side_hum(1)
-        timer_due = nowm - self._fan_cycle_started >= self.cfg.fan_cycle_min * 60
         if hl is not None and hr is not None and abs(hl - hr) >= self.cfg.side_bias_min:
-            return 0 if hl > hr else 1          # feuchtere Seite heizen (trockene NICHT)
-        if timer_due:
-            return (prev_side + 1) % n          # ausgeglichen -> abwechseln
+            return 0 if hl > hr else 1          # sonst: feuchtere Seite bevorzugen
         return prev_side
 
     # ---- Regel-Logik -----------------------------------------------------
