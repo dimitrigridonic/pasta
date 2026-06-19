@@ -235,8 +235,9 @@ function render(s) {
   const ov = s.overrides || [];
   $("overrides-clear").classList.toggle("hidden", ov.length === 0);
   if (ov.length && s.mode === "program") {
+    const rem = Math.min(...ov.map((o) => (o.remaining != null ? o.remaining : 0)));
     const cur = $("prog-phase").textContent;
-    if (!cur.includes("Eingriff")) $("prog-phase").textContent = cur + " · ✋ Eingriff aktiv (Programm läuft weiter)";
+    if (!cur.includes("Eingriff")) $("prog-phase").textContent = cur + ` · ✋ Eingriff aktiv · auto-aus in ${dur(rem)} (Programm läuft weiter)`;
   }
 
   renderSensors(s);

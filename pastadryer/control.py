@@ -54,8 +54,10 @@ class ControlLoop:
         self.manual: dict[tuple[int, int], bool] = {}
         for ch in self.cfg.heaters + self.cfg.fans:
             self.manual[ch.point()] = False
-        # Manuelle Eingriffe WÄHREND eines Programms: Kanal-Override, Programm läuft weiter
+        # Manuelle Eingriffe WÄHREND eines Programms: Kanal-Override, Programm läuft weiter.
+        # Zeitlich begrenzt (override_max_min) -> danach automatisch aus.
         self.overrides: dict[tuple, bool] = {}
+        self._override_since: dict[tuple, float] = {}
 
         # Heizung/Lüfter-Status (für Anzeige)
         self.heater_on = False
@@ -183,7 +185,9 @@ class ControlLoop:
         if self.mode == "program":
             # Eingriff während des Programms: NICHT stoppen, nur diesen Kanal
             # überschreiben. Das Programm (Phasen/Zeit) läuft normal weiter.
+            # Zeitlich begrenzt -> nach override_max_min automatisch wieder aus.
             self.overrides[(aid, iid)] = value
+            self._override_since[(aid, iid)] = time.monotonic()
             self._kick()
             return
         self.mode = "manual"
@@ -194,6 +198,7 @@ class ControlLoop:
     def clear_overrides(self) -> None:
         """Alle manuellen Eingriffe aufheben – das Programm steuert wieder alles."""
         self.overrides.clear()
+        self._override_since.clear()
         self._kick()
 
     def _trip_fault(self, reason: str) -> None:
@@ -418,7 +423,18 @@ class ControlLoop:
         elif self.mode == "program":
             self._decide_program()
 
-        # Manuelle Eingriffe über das LAUFENDE Programm legen – Programm läuft weiter.
+        # Manueller Eingriff ist ZEITLICH BEGRENZT: nach override_max_min automatisch
+        # beenden -> Kanal geht zurück ans Programm (schützt vergessene Heizer/Lüfter).
+        if self.overrides:
+            nowm = time.monotonic()
+            for k in list(self.overrides):
+                if nowm - self._override_since.get(k, nowm) > self.cfg.override_max_min * 60:
+                    self.overrides.pop(k, None)
+                    self._override_since.pop(k, None)
+                    log.info("Manueller Eingriff %s nach %.0f min automatisch beendet",
+                             k, self.cfg.override_max_min)
+
+        # Verbleibende Eingriffe über das LAUFENDE Programm legen – Programm läuft weiter.
         # (Sicherheiten unten greifen weiterhin, auch über einen Override.)
         if self.mode == "program" and self.overrides:
             for k, v in self.overrides.items():
@@ -687,7 +703,10 @@ class ControlLoop:
             "heater_max_on": self.cfg.heater_max_on,
             "program": self.program.name if self.program else None,
             "humidity_trim": round(self.humidity_trim, 1),
-            "overrides": [{"aid": k[0], "iid": k[1], "on": v} for k, v in self.overrides.items()],
+            "overrides": [{"aid": k[0], "iid": k[1], "on": v,
+                           "remaining": max(0, int(self.cfg.override_max_min * 60
+                                       - (time.monotonic() - self._override_since.get(k, time.monotonic()))))}
+                          for k, v in self.overrides.items()],
             "hum_ref": self.hum_ref,
             "humidity_guide": self.cfg.humidity_guide,
             "preheating": self.preheating,

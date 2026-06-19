@@ -104,6 +104,7 @@ class Config:
     sides_right: list[str] = field(default_factory=list)
     side_bias_min: float = 2.5   # ab dieser Feuchte-Differenz (%rF) wird die feuchtere Seite bevorzugt
     humidity_guide: list[str] = field(default_factory=list)  # Leit-Sensoren für die Feuchte-Referenz (leer = alle)
+    override_max_min: float = 5  # manueller Eingriff (Heizung/Lüfter erzwingen) läuft max. so lange, dann auto-aus
     # Programme
     programs: list[Program] = field(default_factory=list)
 
@@ -151,5 +152,6 @@ class Config:
             sides_right=[str(x) for x in (sides.get("right") or [])],
             side_bias_min=float(c.get("side_bias_min", 2.5)),
             humidity_guide=[str(x) for x in (raw.get("humidity_guide") or [])],
+            override_max_min=float(c.get("override_max_min", 5)),
             programs=[Program.parse(p) for p in raw.get("programs", [])],
         )
