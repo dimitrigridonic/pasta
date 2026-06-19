@@ -2,6 +2,9 @@ const $ = (id) => document.getElementById(id);
 let state = null, view = null, phaseTotal = null;
 let histMetric = "hum", lastHist = null, allPrograms = [];
 let runMetric = "hum", runShowSensors = false, runData = null, runNames = {}, runsLoaded = false;
+// klar unterscheidbare Sensorfarben (rot, orange, gelb, grün, blau, violett)
+const RUNCOLS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#4dabf7", "#da77f2"];
+let runGeom = null;
 
 function progPhases(name) {
   const p = allPrograms.find((x) => x.name === name);
@@ -431,8 +434,8 @@ function drawRunChart() {
     ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]);
   };
   if (runShowSensors) {
-    const cols = ["#7aa2f7", "#bb9af7", "#7dcfff", "#e0af68", "#9ece6a", "#f7768e"]; let i = 0;
-    for (const a in runData.sensors) { const col = cols[i % cols.length]; i++; drawLine(runData.sensors[a], vi, col, 1, 0.7); legend += `<span><i style="background:${col}"></i>${runNames[a] || a}</span>`; }
+    let i = 0;
+    for (const a in runData.sensors) { const col = RUNCOLS[i % RUNCOLS.length]; i++; drawLine(runData.sensors[a], vi, col, 1.3, 0.85); legend += `<span><i style="background:${col}"></i>${runNames[a] || a}</span>`; }
   }
   if (isHum && agg.some((p) => p[3] != null)) { drawLine(agg, 3, "#fff", 1.5, 1, [6, 4]); legend = `<span><i style="background:#fff"></i>Ideallinie</span>` + legend; }
   drawLine(agg, vi, isHum ? "#009353" : "#ff7a59", 2.4, 1);
@@ -441,7 +444,47 @@ function drawRunChart() {
   const first = agg.find((p) => p[vi] != null), last = [...agg].reverse().find((p) => p[vi] != null);
   const sub = first && last ? `${first[vi].toFixed(isHum ? 0 : 1)}${unit} → ${last[vi].toFixed(isHum ? 0 : 1)}${unit}` : "";
   $("run-stat").textContent = `· ${span < 1 ? Math.round(span * 60) + " min" : span.toFixed(1) + " h"} · ${sub}`;
+  runGeom = { t0, span, padL, padR, W, H };
 }
+
+/* ---- Analyse-Tooltip: Sensorname + Temp + Feuchte am Mauspunkt ---- */
+function nearestAt(series, t) {
+  if (!series || !series.length) return null;
+  let best = series[0], bd = Math.abs(series[0][0] - t);
+  for (const p of series) { const d = Math.abs(p[0] - t); if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function runHover(e) {
+  const cv = $("run-canvas"); if (!runData || !runGeom || !cv) return;
+  const rect = cv.getBoundingClientRect();
+  const pt = e.touches ? e.touches[0] : e;
+  const x = pt.clientX - rect.left;
+  const g = runGeom, plotW = g.W - g.padL - g.padR;
+  const frac = (x - g.padL) / plotW;
+  if (frac < 0 || frac > 1) { runHideTip(); return; }
+  const t = g.t0 + frac * g.span * 3600;
+  const cross = $("run-cross");
+  cross.style.left = x + "px"; cross.style.height = cv.clientHeight + "px"; cross.classList.remove("hidden");
+  const a0 = nearestAt(runData.agg, t);
+  const when = new Date(a0[0] * 1000).toLocaleString("de-CH", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  let html = `<b>${when}</b><div class="tip-agg">⌀ ${fmt(a0[1], 1)}° · ${fmt(a0[2], 0)}%${a0[3] != null ? ` · Soll ${fmt(a0[3], 0)}%` : ""}</div>`;
+  Object.keys(runData.sensors).forEach((a, i) => {
+    const p = nearestAt(runData.sensors[a], t); if (!p) return;
+    html += `<div><i style="background:${RUNCOLS[i % RUNCOLS.length]}"></i>${runNames[a] || a}: ${fmt(p[1], 1)}° · ${fmt(p[2], 0)}%</div>`;
+  });
+  const tip = $("run-tip"); tip.innerHTML = html; tip.classList.remove("hidden");
+  let tx = x + 14; if (tx + tip.offsetWidth > g.W) tx = x - tip.offsetWidth - 14;
+  tip.style.left = Math.max(0, tx) + "px"; tip.style.top = "6px";
+}
+function runHideTip() { const c = $("run-cross"), t = $("run-tip"); if (c) c.classList.add("hidden"); if (t) t.classList.add("hidden"); }
+(() => {
+  const cv = $("run-canvas"); if (!cv) return;
+  cv.addEventListener("mousemove", runHover);
+  cv.addEventListener("mouseleave", runHideTip);
+  cv.addEventListener("click", runHover);
+  cv.addEventListener("touchstart", runHover, { passive: true });
+  cv.addEventListener("touchmove", runHover, { passive: true });
+})();
 
 /* ---------- Programm-Editor ---------- */
 function phaseRow(ph = {}) {

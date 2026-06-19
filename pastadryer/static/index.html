@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pasta-Trockner</title>
-  <link rel="stylesheet" href="/static/style.css?v=32" />
+  <link rel="stylesheet" href="/static/style.css?v=33" />
 </head>
 <body>
   <header class="topbar">
@@ -133,7 +133,11 @@
           <a id="run-csv" class="btn ghost sm" href="#" download>CSV</a>
         </div>
       </div>
-      <canvas id="run-canvas"></canvas>
+      <div class="run-wrap">
+        <canvas id="run-canvas"></canvas>
+        <div id="run-cross" class="run-cross hidden"></div>
+        <div id="run-tip" class="run-tip hidden"></div>
+      </div>
       <div id="run-legend" class="legend"></div>
       <div id="run-empty" class="cp-empty hidden">Noch keine aufgezeichneten Durchgänge. Sobald ein Programm läuft, werden die Kurven hier gespeichert.</div>
     </section>
@@ -151,6 +155,6 @@
   </section>
 
   <footer id="foot"></footer>
-  <script src="/static/app.js?v=32"></script>
+  <script src="/static/app.js?v=33"></script>
 </body>
 </html>

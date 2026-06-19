@@ -132,6 +132,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 /* ---- Chart ---- */
 #hist-canvas, #run-canvas { width: 100%; height: clamp(180px, 26vw, 320px); background: var(--surface-2); border-radius: 0.7rem; display: block; }
 #run-canvas { height: clamp(240px, 40vw, 440px); }
+.run-wrap { position: relative; }
+.run-cross { position: absolute; top: 0; width: 1px; background: rgba(255, 255, 255, 0.45); pointer-events: none; }
+.run-tip { position: absolute; pointer-events: none; z-index: 5; background: rgba(10, 10, 14, 0.96); border: 1px solid #34343e; border-radius: 8px; padding: 6px 9px; font: 11px/1.55 system-ui; color: #cfcfd6; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5); }
+.run-tip b { color: #fff; }
+.run-tip .tip-agg { color: #9aa0aa; margin: 1px 0 3px; }
+.run-tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .chart-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
 .chart-controls select { width: auto; }
 .nudge { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
