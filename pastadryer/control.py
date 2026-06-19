@@ -520,19 +520,20 @@ class ControlLoop:
         t = self.agg_temp
         h = self.agg_hum
         hyst = self.cfg.humidity_hysteresis
+        hb = hyst / 2.0          # halbes Toleranzband – die Ideallinie ist die MITTE
         self.drop_rate = self._humidity_drop_rate()   # nur zur Anzeige
         self.allowed_drop = None
 
-        # --- Dynamische Ruhephase: an die Ideallinie gekoppelt ---
-        # Erreicht/unterschreitet die Feuchte die Linie -> ALLES aus, bis sie sich
-        # wieder über die Linie (+ Reserve) erholt hat. Dauer = dynamisch, nicht fix.
+        # --- Dynamische Ruhephase: um die Ideallinie ZENTRIERT ---
+        # Die Feuchte soll auf der Linie liegen: über der Mitte (+hb) wird getrocknet,
+        # unter der Mitte (−hb) wird geruht, bis sie sich wieder zur Mitte erholt hat.
         if floor is not None and h is not None:
             if self.resting:
-                if h >= floor + hyst:
+                if h >= floor + hb:
                     self.resting = False
-            elif h <= floor:
+            elif h <= floor - hb:
                 self.resting = True
-                log.info("Ruhephase: Feuchte %.0f%% an Ideallinie %.0f%% – erholen lassen", h, floor)
+                log.info("Ruhephase: Feuchte %.1f%% unter Ideallinie %.1f%% – erholen lassen", h, floor)
         if self.resting:
             self.heater_on = False
             self.venting = False
@@ -554,10 +555,10 @@ class ControlLoop:
         # falls die Seite (noch) keine Sensordaten hat.
         h_side = self._side_hum(self.active_side)
         h_gate = h_side if h_side is not None else h
-        humidity_ok = floor is None or (h_gate is not None and h_gate > floor)
+        humidity_ok = floor is None or (h_gate is not None and h_gate > floor - hb)
 
         # --- Heizung: Band low..high mit Trägheit (Heizung sitzt oben, ~2-3 min bis Wirkung) ---
-        force_off = (t is None) or (not humidity_ok)   # an der Linie -> sofort aus
+        force_off = (t is None) or (not humidity_ok)   # unter der Mitte -> aus (ruhen)
         if force_off:
             band_on = False
         elif t < low:
@@ -581,9 +582,9 @@ class ControlLoop:
         if floor is not None and h is not None:
             stall = self._drop_over(self.cfg.fan_stall_h * 3600)
             stalled = stall is not None and stall[0] < self.cfg.fan_stall_drop
-            if stalled and h > floor + hyst:
+            if stalled and h > floor + hb:
                 self.venting = True
-            elif h <= floor + hyst:
+            elif h <= floor + hb:
                 self.venting = False
         else:
             self.venting = False
@@ -683,7 +684,7 @@ class ControlLoop:
             "hum_left": self._side_hum(0),
             "hum_right": self._side_hum(1),
             "resting": self.resting,
-            "rest_recover_to": round(self.humidity_target + self.cfg.humidity_hysteresis, 1)
+            "rest_recover_to": round(self.humidity_target + self.cfg.humidity_hysteresis / 2, 1)
                 if (self.resting and self.humidity_target is not None) else None,
             "drop_rate": round(self.drop_rate, 2) if self.drop_rate is not None else None,
             "heaters": [{"name": h.name, "on": self.desired.get(h.point(), False),
