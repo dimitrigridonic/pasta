@@ -232,6 +232,13 @@ function render(s) {
   $("href-guide").textContent = guideNums ? `Untere ${guideNums}` : "Untere";
   $("href-val").textContent = hr === "guide" ? "Bezug: untere Reihe" : "Bezug: Schnitt aller";
 
+  const ov = s.overrides || [];
+  $("overrides-clear").classList.toggle("hidden", ov.length === 0);
+  if (ov.length && s.mode === "program") {
+    const cur = $("prog-phase").textContent;
+    if (!cur.includes("Eingriff")) $("prog-phase").textContent = cur + " · ✋ Eingriff aktiv (Programm läuft weiter)";
+  }
+
   renderSensors(s);
   renderDryer(s);
 
@@ -272,6 +279,7 @@ $("nudge-faster").onclick = async () => render(await api("/api/program/nudge", {
 $("nudge-slower").onclick = async () => render(await api("/api/program/nudge", { delta: 1 }));
 $("href-all").onclick = async () => render(await api("/api/humref", { mode: "all" }));
 $("href-guide").onclick = async () => render(await api("/api/humref", { mode: "guide" }));
+$("overrides-clear").onclick = async () => render(await api("/api/overrides/clear", null, "POST"));
 $("program-select").onchange = () => drawChart();
 $("fault-reset").onclick = async () => render(await api("/api/fault/clear", null, "POST"));
 $("sensors-read").onclick = async () => {

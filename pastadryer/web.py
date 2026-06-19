@@ -99,6 +99,11 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         loop.enter_manual()
         return loop.state()
 
+    @app.api_route("/api/overrides/clear", methods=["GET", "POST"])
+    async def overrides_clear():
+        loop.clear_overrides()
+        return loop.state()
+
     @app.post("/api/program/start")
     async def program_start(req: ProgReq):
         if not loop.start_program(req.name):

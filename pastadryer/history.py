@@ -52,9 +52,11 @@ class History:
                 rows)
             self._conn.commit()
 
-    def runs(self, gap_s: float = 1800, limit: int = 60) -> list[dict]:
-        """Erkennt Durchgänge anhand von Zeitlücken (> gap_s = neuer Lauf).
-        Neueste zuerst."""
+    def runs(self, gap_s: float = 43200, limit: int = 60) -> list[dict]:
+        """Erkennt Durchgänge. Segmente DESSELBEN Programms werden zusammengefügt
+        (Unterbrechungen durch Not-Aus/Neustart/Eingriff überbrückt), solange die
+        Lücke < gap_s (Default 12 h). Ein anderer Programmname ODER eine sehr große
+        Lücke startet einen neuen Durchgang. Neueste zuerst."""
         if not self.enabled or not self._conn:
             return []
         with self._lock:
@@ -63,14 +65,12 @@ class History:
         runs: list[dict] = []
         cur: dict | None = None
         for ts, prog in rows:
-            if cur is None or ts - cur["end"] > gap_s:
+            if (cur is None or ts - cur["end"] > gap_s or prog != cur["prog"]):
                 cur = {"start": ts, "end": ts, "points": 1, "prog": prog}
                 runs.append(cur)
             else:
                 cur["end"] = ts
                 cur["points"] += 1
-                if prog and not cur["prog"]:
-                    cur["prog"] = prog
         runs.reverse()
         return runs[:limit]
 

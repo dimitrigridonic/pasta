@@ -54,6 +54,8 @@ class ControlLoop:
         self.manual: dict[tuple[int, int], bool] = {}
         for ch in self.cfg.heaters + self.cfg.fans:
             self.manual[ch.point()] = False
+        # Manuelle Eingriffe WÄHREND eines Programms: Kanal-Override, Programm läuft weiter
+        self.overrides: dict[tuple, bool] = {}
 
         # Heizung/Lüfter-Status (für Anzeige)
         self.heater_on = False
@@ -159,6 +161,7 @@ class ControlLoop:
         self.mode = "off"
         self.program = None
         self.resting = False
+        self.overrides.clear()
         for k in self.manual:        # Manuell-Schalter zurücksetzen (sauberer Reset)
             self.manual[k] = False
         self._kick()
@@ -177,9 +180,20 @@ class ControlLoop:
     def set_manual(self, aid: str, iid: str, value: bool) -> None:
         if self.fault:
             return   # verriegelt: erst quittieren
+        if self.mode == "program":
+            # Eingriff während des Programms: NICHT stoppen, nur diesen Kanal
+            # überschreiben. Das Programm (Phasen/Zeit) läuft normal weiter.
+            self.overrides[(aid, iid)] = value
+            self._kick()
+            return
         self.mode = "manual"
         self.program = None
         self.manual[(aid, iid)] = value
+        self._kick()
+
+    def clear_overrides(self) -> None:
+        """Alle manuellen Eingriffe aufheben – das Programm steuert wieder alles."""
+        self.overrides.clear()
         self._kick()
 
     def _trip_fault(self, reason: str) -> None:
@@ -210,6 +224,7 @@ class ControlLoop:
         self.mode = "program"
         self.resting = False
         self.humidity_trim = 0.0
+        self.overrides.clear()
         self._hum_hist.clear()
         self.preheating = self.cfg.preheat_enabled
         self._preheat_started = time.monotonic()
@@ -260,6 +275,7 @@ class ControlLoop:
         self.preheating = False
         self.resting = False
         self.humidity_trim = 0.0
+        self.overrides.clear()
         self._hum_hist.clear()
         self.active_side = 0
         self._fan_cycle_started = nowm
@@ -401,6 +417,14 @@ class ControlLoop:
 
         elif self.mode == "program":
             self._decide_program()
+
+        # Manuelle Eingriffe über das LAUFENDE Programm legen – Programm läuft weiter.
+        # (Sicherheiten unten greifen weiterhin, auch über einen Override.)
+        if self.mode == "program" and self.overrides:
+            for k, v in self.overrides.items():
+                self.desired[k] = v
+            self.heater_on = any(self.desired.get(h.point()) for h in self.cfg.heaters)
+            self.venting = any(self.desired.get(f.point()) for f in self.cfg.fans)
 
         # Sicherheit 1: zu heiss -> Heizungen hart aus (in jedem Modus)
         self.safety_tripped = False
@@ -663,6 +687,7 @@ class ControlLoop:
             "heater_max_on": self.cfg.heater_max_on,
             "program": self.program.name if self.program else None,
             "humidity_trim": round(self.humidity_trim, 1),
+            "overrides": [{"aid": k[0], "iid": k[1], "on": v} for k, v in self.overrides.items()],
             "hum_ref": self.hum_ref,
             "humidity_guide": self.cfg.humidity_guide,
             "preheating": self.preheating,
