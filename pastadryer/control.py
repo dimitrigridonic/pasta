@@ -589,11 +589,15 @@ class ControlLoop:
         else:
             self.venting = False
 
-        # --- Stellglieder auf die gewählte aktive Seite legen (Heizung UND Lüfter) ---
+        # --- Stellglieder: Heizung auf der aktiven Seite, Lüfter auf der GEGENüber-
+        # liegenden Seite (Querstrom durch den Kasten – die Heizung wärmt auf einer
+        # Seite, der Lüfter bläst von der anderen Seite die warme, feuchte Luft weg). ---
+        nfan = max(len(self.cfg.fans), 1)
+        fan_side = (self.active_side + 1) % nfan
         for i, hch in enumerate(self.cfg.heaters):
             self.desired[hch.point()] = self.heater_on and (i == self.active_side)
         for i, f in enumerate(self.cfg.fans):
-            self.desired[f.point()] = self.venting and (i == self.active_side)
+            self.desired[f.point()] = self.venting and (i == fan_side)
 
     def _current_humidity_target(self, phase) -> float | None:
         if phase.humidity_start is None:
