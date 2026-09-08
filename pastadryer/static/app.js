@@ -178,7 +178,13 @@ function render(s) {
 
   $("temp").textContent = fmt(s.agg_temp);
   $("hum").textContent = fmt(s.agg_hum, 0);
-  $("temp-sub").textContent = `Band ${s.temp_low}–${s.temp_high} °C` + (s.phase && s.phase.temp_custom && !s.preheating ? " (Programm)" : "");
+  // Beim Vorheizen laufen beide Heizungen ohne Band; zeigen, welches Band DANACH gilt.
+  const bandLo = (s.preheating && s.phase) ? s.phase.temp_low : s.temp_low;
+  const bandHi = (s.preheating && s.phase) ? s.phase.temp_high : s.temp_high;
+  const bandCustom = !!(s.phase && s.phase.temp_custom);
+  $("temp-sub").textContent = s.preheating && s.phase
+    ? `Vorheizen · dann Band ${bandLo}–${bandHi} °C`
+    : `Band ${bandLo}–${bandHi} °C` + (bandCustom ? " (Programm)" : "");
   document.querySelectorAll(".p-tl").forEach((i) => { i.placeholder = s.cfg_temp_low; });
   document.querySelectorAll(".p-th").forEach((i) => { i.placeholder = s.cfg_temp_high; });
   $("hum-sub").textContent = s.phase && s.phase.humidity_target != null
@@ -190,7 +196,9 @@ function render(s) {
     badge.className = "badge " + (s.mode === "program" ? "program" : s.mode === "manual" ? "manual" : "");
   }
 
-  let bandTxt = `Feuchte folgt Ideallinie · Heizung ${s.temp_low}–${s.temp_high}°C · Lüfter = Notnagel`;
+  let bandTxt = s.preheating && s.phase
+    ? `Vorheizen: beide Heizungen volle Leistung · danach Heizung ${bandLo}–${bandHi}°C · Feuchte folgt Ideallinie`
+    : `Feuchte folgt Ideallinie · Heizung ${bandLo}–${bandHi}°C · Lüfter = Notnagel`;
   if (s.drop_rate != null) bandTxt += ` · Abfall ${s.drop_rate}%/h`;
   if (s.resting) bandTxt += ` · 💤 Ruhe bis ≥${s.rest_recover_to}%`;
   if (s.safety_tripped) bandTxt += " · ⚠️ Sicherheit aktiv";
