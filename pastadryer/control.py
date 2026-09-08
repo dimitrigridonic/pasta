@@ -220,7 +220,7 @@ class ControlLoop:
         if self.fault:
             return False   # verriegelt: erst quittieren
         prog = self.store.get(name)
-        if prog is None:
+        if prog is None or not prog.phases:
             return False
         self.program = prog
         self.phase_index = 0
@@ -268,7 +268,7 @@ class ControlLoop:
         if self.fault:
             return False
         prog = self.store.get(name)
-        if prog is None:
+        if prog is None or not prog.phases:
             return False
         self.program = prog
         self.phase_index = max(0, min(int(phase_index), len(prog.phases) - 1))
@@ -515,8 +515,7 @@ class ControlLoop:
         if self.humidity_target is not None and self.humidity_trim:
             self.humidity_target = round(min(95.0, max(20.0, self.humidity_target + self.humidity_trim)), 1)
         floor = self.humidity_target
-        low = phase.temp_low if phase.temp_low is not None else self.cfg.temp_low
-        high = phase.temp_high if phase.temp_high is not None else self.cfg.temp_high
+        low, high = self._phase_band(phase)
         t = self.agg_temp
         h = self.agg_hum
         hyst = self.cfg.humidity_hysteresis
@@ -599,6 +598,17 @@ class ControlLoop:
         for i, f in enumerate(self.cfg.fans):
             self.desired[f.point()] = self.venting and (i == fan_side)
 
+    def _phase_band(self, phase) -> tuple[float, float]:
+        """Wirksames Temperaturband einer Phase (Phase überschreibt config), auf
+        sichere Werte geklemmt: Obergrenze bleibt IMMER 1 °C unter max_temp (sonst
+        würde die Sicherheitsabschaltung im Normalbetrieb flattern), Untergrenze
+        unter der Obergrenze. Schutz vor alten/handeditierten programs.json."""
+        low = phase.temp_low if phase.temp_low is not None else self.cfg.temp_low
+        high = phase.temp_high if phase.temp_high is not None else self.cfg.temp_high
+        high = min(high, self.cfg.max_temp - 1.0)
+        low = min(low, high - 0.5)
+        return low, high
+
     def _current_humidity_target(self, phase) -> float | None:
         if phase.humidity_start is None:
             return None
@@ -660,16 +670,16 @@ class ControlLoop:
         phase_remaining = None
         if self.mode == "program" and self.program:
             ph = self.program.phases[self.phase_index]
-            low = ph.temp_low if ph.temp_low is not None else self.cfg.temp_low
-            high = ph.temp_high if ph.temp_high is not None else self.cfg.temp_high
+            low, high = self._phase_band(ph)
             phase = {
                 "index": self.phase_index, "count": len(self.program.phases),
                 "name": ph.name, "temp_low": low, "temp_high": high,
+                "temp_custom": ph.temp_low is not None or ph.temp_high is not None,
                 "humidity_target": self.humidity_target,
             }
             if ph.duration_h is not None and self._phase_started is not None:
                 elapsed = time.monotonic() - self._phase_started
-                phase_remaining = max(0, int(ph.duration_h * 3600 - elapsed))
+                phase_remaining = int(max(0.0, min(ph.duration_h * 3600 - elapsed, 1e9)))
 
         return {
             "mode": self.mode,
@@ -680,8 +690,12 @@ class ControlLoop:
             "agg_temp": self.agg_temp,
             "agg_hum": self.agg_hum,
             "aggregate": self.cfg.aggregate,
-            "temp_low": self.cfg.temp_low,
-            "temp_high": self.cfg.temp_high,
+            # WIRKSAMES Band: Phase kann das globale Band aus config.yaml überschreiben.
+            # Beim Vorheizen gilt kein Band (beide Heizungen volle Leistung) -> config zeigen.
+            "temp_low": phase["temp_low"] if (phase and not self.preheating) else self.cfg.temp_low,
+            "temp_high": phase["temp_high"] if (phase and not self.preheating) else self.cfg.temp_high,
+            "cfg_temp_low": self.cfg.temp_low,
+            "cfg_temp_high": self.cfg.temp_high,
             "heater_on": self.heater_on,
             "venting": self.venting,
             "active_side": self.active_side,

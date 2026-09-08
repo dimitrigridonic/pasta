@@ -4,6 +4,7 @@ Intern heissen die Felder weiter aid/iid (= device/property) — minimiert Code-
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import yaml
@@ -33,6 +34,17 @@ class SensorCfg:
         return cls(name=str(d))
 
 
+def _num(v) -> float | None:
+    """Zahl aus JSON/YAML robust lesen: None/Strings/NaN/Inf/bool -> None (= Standard gilt)."""
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        f = float(v)
+        return f if math.isfinite(f) else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 @dataclass
 class Phase:
     name: str
@@ -44,13 +56,15 @@ class Phase:
 
     @classmethod
     def parse(cls, d: dict) -> "Phase":
+        hs = _num(d.get("humidity_start"))
+        he = _num(d.get("humidity_end"))
         return cls(
-            name=d.get("name", "Phase"),
-            duration_h=d.get("duration_h"),
-            humidity_start=d.get("humidity_start"),
-            humidity_end=d.get("humidity_end", d.get("humidity_start")),
-            temp_low=d.get("temp_low"),
-            temp_high=d.get("temp_high"),
+            name=str(d.get("name", "Phase")),
+            duration_h=_num(d.get("duration_h")),
+            humidity_start=hs,
+            humidity_end=he if he is not None else hs,
+            temp_low=_num(d.get("temp_low")),
+            temp_high=_num(d.get("temp_high")),
         )
 
 

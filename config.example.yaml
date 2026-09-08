@@ -12,9 +12,10 @@ web:
 control:
   poll_interval: 15          # Sekunden zwischen Regel-Ticks (liest MQTT-Cache)
   aggregate: average         # average | max | min — wie aus den Sensoren EIN Regelwert wird
-  temp_low: 30               # Heizungen AN unterhalb (°C)
+  temp_low: 30               # Heizungen AN unterhalb (°C) – Standard; je Phase überschreibbar (temp_low/temp_high)
   temp_high: 32              # Heizungen AUS oberhalb (°C)
-  max_temp: 38               # harte Sicherheits-Abschaltung der Heizungen (°C)
+  max_temp: 42               # harte Sicherheits-Abschaltung der Heizungen (°C) – muss ÜBER dem
+                             # höchsten temp_high aller Programme liegen (Caserecce: 38)
   humidity_hysteresis: 3     # Reserve über der Ideallinie (% rF)
   fan_cycle_min: 5           # Heizung & Lüfter wechseln links/rechts alle X Min (< heater_max_on!)
   rate_window_min: 40        # Messfenster für die Feuchte-Abfallrate (Anzeige)
@@ -75,11 +76,12 @@ programs:
       - { name: "70→60%",     duration_h: 20, humidity_start: 70, humidity_end: 60 }
       - { name: "60→50%",     duration_h: 12, humidity_start: 60, humidity_end: 50 }
 
+  # Caserecce wärmer: Band 36–38 °C (überschreibt temp_low/temp_high je Phase)
   - name: "Caserecce (10-10-5)"
     phases:
-      - { name: "80% halten", duration_h: 10, humidity_start: 80, humidity_end: 80 }
-      - { name: "80→70%",     duration_h: 10, humidity_start: 80, humidity_end: 70 }
-      - { name: "70→60%",     duration_h: 5,  humidity_start: 70, humidity_end: 60 }
+      - { name: "80% halten", duration_h: 10, humidity_start: 80, humidity_end: 80, temp_low: 36, temp_high: 38 }
+      - { name: "80→70%",     duration_h: 10, humidity_start: 80, humidity_end: 70, temp_low: 36, temp_high: 38 }
+      - { name: "70→60%",     duration_h: 5,  humidity_start: 70, humidity_end: 60, temp_low: 36, temp_high: 38 }
 
   - name: "Test (schnell, 6 min)"
     phases:

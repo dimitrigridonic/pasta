@@ -29,7 +29,18 @@ const PALETTE = ["#009353", "#56b6e0", "#ff7a59", "#36d399", "#c678dd", "#e0b04c
 async function api(path, body, method) {
   const opts = { method: method || (body ? "POST" : "GET") };
   if (body) { opts.headers = { "Content-Type": "application/json" }; opts.body = JSON.stringify(body); }
-  return (await fetch(path, opts)).json();
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`;
+    try { const j = await res.json(); const d = j && (j.detail ?? j.error); if (d) detail = typeof d === "string" ? d : JSON.stringify(d); } catch (_) {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+// Bedien-Aktion: Antwort rendern, Fehler dem Nutzer zeigen (statt stiller Promise-Rejection)
+async function call(path, body, method) {
+  try { render(await api(path, body, method)); }
+  catch (e) { alert(e.message || e); }
 }
 const fmt = (v, d = 1) => (v == null ? "–" : Number(v).toFixed(d));
 function dur(sec) {
@@ -64,7 +75,7 @@ function buildManual(s) {
   [...s.heaters, ...s.fans].forEach((ch) => {
     const b = document.createElement("button");
     b.className = "toggle"; b.id = `t-${ch.aid}-${ch.iid}`; b.textContent = ch.name;
-    b.onclick = async () => render(await api("/api/manual", { aid: ch.aid, iid: ch.iid, on: !chOn(state, ch.aid, ch.iid) }));
+    b.onclick = async () => await call("/api/manual", { aid: ch.aid, iid: ch.iid, on: !chOn(state, ch.aid, ch.iid) });
     box.appendChild(b);
   });
 }
@@ -77,7 +88,7 @@ function renderSensors(s) {
       <div class="svals"><span class="t">${fmt(se.temp)}°</span><span class="h">${fmt(se.hum, 0)}%</span>${batt}</div>`;
     d.querySelector(".edit").onclick = async () => {
       const name = prompt(`Name für Sensor (aid ${se.aid}):`, se.name);
-      if (name != null) render(await api("/api/sensor/name", { aid: se.aid, name }));
+      if (name != null) await call("/api/sensor/name", { aid: se.aid, name });
     };
     box.appendChild(d);
   });
@@ -167,7 +178,9 @@ function render(s) {
 
   $("temp").textContent = fmt(s.agg_temp);
   $("hum").textContent = fmt(s.agg_hum, 0);
-  $("temp-sub").textContent = `Band ${s.temp_low}–${s.temp_high} °C`;
+  $("temp-sub").textContent = `Band ${s.temp_low}–${s.temp_high} °C` + (s.phase && s.phase.temp_custom && !s.preheating ? " (Programm)" : "");
+  document.querySelectorAll(".p-tl").forEach((i) => { i.placeholder = s.cfg_temp_low; });
+  document.querySelectorAll(".p-th").forEach((i) => { i.placeholder = s.cfg_temp_high; });
   $("hum-sub").textContent = s.phase && s.phase.humidity_target != null
     ? `Ideallinie ${s.phase.humidity_target}%` : (s.preheating ? "Vorheizen…" : "");
   const badge = $("mode-badge");
@@ -272,23 +285,23 @@ function render(s) {
 document.querySelectorAll(".mode").forEach((b) =>
   b.addEventListener("click", async () => {
     view = b.dataset.mode; applyView();
-    if (view === "off") render(await api("/api/off", null, "POST"));
-    else if (view === "manual") render(await api("/api/manual/enter", null, "POST"));
+    if (view === "off") await call("/api/off", null, "POST");
+    else if (view === "manual") await call("/api/manual/enter", null, "POST");
   })
 );
-$("program-start").onclick = async () => { phaseTotal = null; render(await api("/api/program/start", { name: $("program-select").value })); };
-$("program-stop").onclick = async () => render(await api("/api/program/stop", null, "POST"));
-$("program-skip").onclick = async () => { phaseTotal = null; render(await api("/api/program/skip", null, "POST")); };
-$("nudge-faster").onclick = async () => render(await api("/api/program/nudge", { delta: -1 }));
-$("nudge-slower").onclick = async () => render(await api("/api/program/nudge", { delta: 1 }));
-$("href-all").onclick = async () => render(await api("/api/humref", { mode: "all" }));
-$("href-guide").onclick = async () => render(await api("/api/humref", { mode: "guide" }));
-$("overrides-clear").onclick = async () => render(await api("/api/overrides/clear", null, "POST"));
+$("program-start").onclick = async () => { phaseTotal = null; await call("/api/program/start", { name: $("program-select").value }); };
+$("program-stop").onclick = async () => await call("/api/program/stop", null, "POST");
+$("program-skip").onclick = async () => { phaseTotal = null; await call("/api/program/skip", null, "POST"); };
+$("nudge-faster").onclick = async () => await call("/api/program/nudge", { delta: -1 });
+$("nudge-slower").onclick = async () => await call("/api/program/nudge", { delta: 1 });
+$("href-all").onclick = async () => await call("/api/humref", { mode: "all" });
+$("href-guide").onclick = async () => await call("/api/humref", { mode: "guide" });
+$("overrides-clear").onclick = async () => await call("/api/overrides/clear", null, "POST");
 $("program-select").onchange = () => drawChart();
-$("fault-reset").onclick = async () => render(await api("/api/fault/clear", null, "POST"));
+$("fault-reset").onclick = async () => await call("/api/fault/clear", null, "POST");
 $("sensors-read").onclick = async () => {
   const b = $("sensors-read"); b.textContent = "…"; b.disabled = true;
-  try { render(await api("/api/sensors/read", null, "POST")); } finally { b.textContent = "↻ Werte holen"; b.disabled = false; }
+  try { await call("/api/sensors/read", null, "POST"); } finally { b.textContent = "↻ Werte holen"; b.disabled = false; }
 };
 
 // Im Trockner-Schema Heizung/Lüfter direkt antippen (manuell schalten)
@@ -296,7 +309,7 @@ $("dryer").addEventListener("click", async (e) => {
   const g = e.target.closest("[data-aid]");
   if (!g || !g.dataset.aid || g.dataset.aid === "undefined") return;
   const aid = g.dataset.aid, iid = g.dataset.iid;
-  render(await api("/api/manual", { aid, iid, on: !chOn(state, aid, iid) }));
+  await call("/api/manual", { aid, iid, on: !chOn(state, aid, iid) });
 });
 
 // Tabs umschalten
@@ -494,6 +507,8 @@ function phaseRow(ph = {}) {
     <input class="p-dur" type="number" step="0.5" min="0" value="${ph.duration_h ?? 1}" />
     <input class="p-hs" type="number" min="0" max="100" value="${ph.humidity_start ?? 70}" />
     <input class="p-he" type="number" min="0" max="100" value="${ph.humidity_end ?? ph.humidity_start ?? 70}" />
+    <input class="p-tl" type="number" step="0.5" min="5" max="60" placeholder="${state ? state.cfg_temp_low : ""}" value="${ph.temp_low ?? ""}" title="Heizung AN unterhalb (°C) – leer = Standard aus config" />
+    <input class="p-th" type="number" step="0.5" min="5" max="60" placeholder="${state ? state.cfg_temp_high : ""}" value="${ph.temp_high ?? ""}" title="Heizung AUS oberhalb (°C) – leer = Standard aus config" />
     <button class="icon-btn p-del" title="Phase entfernen">✕</button>`;
   row.querySelector(".p-del").onclick = () => row.remove();
   return row;
@@ -502,17 +517,21 @@ function programBlock(p) {
   const wrap = document.createElement("div"); wrap.className = "prog"; wrap.dataset.orig = p.name;
   const head = document.createElement("input"); head.className = "pname"; head.value = p.name;
   const cols = document.createElement("div"); cols.className = "phase-row phase-head";
-  cols.innerHTML = `<span>Phase</span><span>Std.</span><span>Feuchte von %</span><span>bis %</span><span></span>`;
+  cols.innerHTML = `<span>Phase</span><span>Std.</span><span>Feuchte von %</span><span>bis %</span><span>°C an</span><span>°C aus</span><span></span>`;
   const phases = document.createElement("div"); phases.className = "phases";
   (p.phases || []).forEach((ph) => phases.appendChild(phaseRow(ph)));
   const actions = document.createElement("div"); actions.className = "prog-actions";
   const add = mkBtn("+ Phase", "ghost sm", () => phases.appendChild(phaseRow()));
   const save = mkBtn("Speichern", "primary sm", async () => {
     const body = { name: head.value.trim() || "Programm", old_name: wrap.dataset.orig, phases: gather(phases) };
-    await api("/api/programs", body); await loadPrograms();
+    try { await api("/api/programs", body); await loadPrograms(); }
+    catch (e) { alert(e.message || e); }
   });
   const del = mkBtn("Löschen", "ghost sm danger", async () => {
-    if (confirm(`Programm "${p.name}" löschen?`)) { await api(`/api/programs/${encodeURIComponent(p.name)}`, null, "DELETE"); await loadPrograms(); }
+    if (confirm(`Programm "${p.name}" löschen?`)) {
+      try { await api(`/api/programs/${encodeURIComponent(p.name)}`, null, "DELETE"); await loadPrograms(); }
+      catch (e) { alert(e.message || e); }
+    }
   });
   actions.append(add, save, del);
   wrap.append(head, cols, phases, actions);
@@ -524,12 +543,21 @@ function gather(phasesEl) {
     duration_h: parseFloat(r.querySelector(".p-dur").value) || 0,
     humidity_start: parseFloat(r.querySelector(".p-hs").value),
     humidity_end: parseFloat(r.querySelector(".p-he").value),
+    ...optNum("temp_low", r.querySelector(".p-tl").value),
+    ...optNum("temp_high", r.querySelector(".p-th").value),
   }));
+}
+// leeres Feld = Schlüssel weglassen -> Standard aus config.yaml gilt
+function optNum(key, raw) {
+  const v = parseFloat(raw);
+  return raw !== "" && Number.isFinite(v) ? { [key]: v } : {};
 }
 function mkBtn(txt, cls, fn) { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = txt; b.onclick = fn; return b; }
 async function loadPrograms() {
-  allPrograms = await api("/api/programs");
-  const box = $("prog-editor"); box.innerHTML = "";
+  const box = $("prog-editor");
+  try { allPrograms = await api("/api/programs"); }
+  catch (e) { box.textContent = `Programme konnten nicht geladen werden: ${e.message || e}`; return; }
+  box.innerHTML = "";
   allPrograms.forEach((p) => box.appendChild(programBlock(p)));
   drawChart();
 }

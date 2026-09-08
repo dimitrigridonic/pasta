@@ -1,11 +1,12 @@
 """FastAPI-Webserver: Dashboard + JSON-API."""
 from __future__ import annotations
 
+import math
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -47,6 +48,66 @@ class ProgramBody(BaseModel):
     name: str
     phases: list[dict]
     old_name: str | None = None
+
+
+_NUM_FIELDS = ("duration_h", "humidity_start", "humidity_end", "temp_low", "temp_high")
+MAX_PHASE_H = 1000.0        # längste erlaubte Phase (Std.) – schützt Zeitrechnung/State vor Überlauf
+BAND_MARGIN = 1.0           # Band-Obergrenze muss so weit unter max_temp bleiben (= Engine-Clamp)
+
+
+def _validate_phases(phases, cfg: Config) -> str | None:
+    """Prüft ein Programm VOR dem Speichern/Starten. Mutiert die Phasen: Zahlen werden
+    zu float normalisiert, damit nie Strings/NaN in programs.json landen (die Engine
+    vergleicht damit und würde sonst jeden Tick crashen — VOR der Sicherheitskette).
+    Temperaturband: 'aus' > 'an' und 'aus' < max_temp, sonst flattert die Abschaltung."""
+    if not isinstance(phases, list) or not phases:
+        return "Ein Programm braucht mindestens eine Phase."
+    if len(phases) > 200:
+        return "Zu viele Phasen (max. 200)."
+    for i, ph in enumerate(phases, 1):
+        if not isinstance(ph, dict):
+            return f"Phase {i}: ungültiges Format."
+        ph["name"] = str(ph.get("name") or f"Phase {i}")[:80]
+        for key in _NUM_FIELDS:
+            v = ph.get(key)
+            if v is None:
+                ph.pop(key, None)
+                continue
+            try:
+                ok = not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(float(v))
+            except OverflowError:       # int jenseits float-Bereich
+                ok = False
+            if not ok:
+                return f"Phase {i}: '{key}' muss eine Zahl sein (ist {str(v)[:40]!r})."
+            ph[key] = float(v)
+        dur = ph.get("duration_h")
+        if dur is None or dur < 0:
+            return f"Phase {i}: Dauer (Std.) fehlt oder ist negativ."
+        if dur > MAX_PHASE_H:
+            return f"Phase {i}: Dauer ({dur:g} h) über dem Maximum von {MAX_PHASE_H:g} h."
+        for key in ("humidity_start", "humidity_end"):
+            v = ph.get(key)
+            if v is not None and not (0 <= v <= 100):
+                return f"Phase {i}: '{key}' muss zwischen 0 und 100 % liegen."
+        lo, hi = ph.get("temp_low"), ph.get("temp_high")
+        if lo is None and hi is None:
+            continue
+        lo_eff = cfg.temp_low if lo is None else lo
+        hi_eff = cfg.temp_high if hi is None else hi
+        if lo is not None and lo < 5:
+            return f"Phase {i}: '°C an' ({lo:g}) ist unplausibel niedrig."
+        if hi_eff <= lo_eff:
+            return f"Phase {i}: '°C aus' ({hi_eff:g}) muss über '°C an' ({lo_eff:g}) liegen."
+        if hi_eff > cfg.max_temp - BAND_MARGIN:
+            return (f"Phase {i}: '°C aus' ({hi_eff:g}) muss mindestens {BAND_MARGIN:g} °C unter der "
+                    f"Sicherheits-Abschaltung max_temp ({cfg.max_temp:g} °C, config.yaml) liegen, "
+                    f"also ≤ {cfg.max_temp - BAND_MARGIN:g}.")
+    return None
+
+
+def _clean_name(name) -> str | None:
+    n = " ".join(str(name or "").split())[:80]
+    return n or None
 
 
 class RenameReq(BaseModel):
@@ -104,10 +165,22 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         loop.clear_overrides()
         return loop.state()
 
+    def _check_stored(name: str) -> None:
+        """Gespeichertes Programm vor Start/Resume prüfen (auch alte programs.json)."""
+        raw = next((p for p in store.list() if p.get("name") == name), None)
+        if raw is None:
+            raise HTTPException(status_code=404, detail="unbekanntes Programm")
+        phases = raw.get("phases")
+        copy = [dict(ph) if isinstance(ph, dict) else ph for ph in phases] if isinstance(phases, list) else phases
+        err = _validate_phases(copy, cfg)
+        if err:
+            raise HTTPException(status_code=400, detail=f"Programm '{name}' ungültig – {err}")
+
     @app.post("/api/program/start")
     async def program_start(req: ProgReq):
+        _check_stored(req.name)
         if not loop.start_program(req.name):
-            return JSONResponse({"error": "unbekanntes Programm"}, status_code=404)
+            raise HTTPException(status_code=409, detail="Start nicht möglich (Not-Aus verriegelt? erst quittieren)")
         return loop.state()
 
     @app.api_route("/api/program/stop", methods=["GET", "POST"])
@@ -132,8 +205,11 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
 
     @app.post("/api/program/resume")
     async def program_resume(req: ResumeReq):
+        if not math.isfinite(req.elapsed_s) or req.elapsed_s < 0 or req.elapsed_s > MAX_PHASE_H * 3600:
+            raise HTTPException(status_code=400, detail="elapsed_s ungültig")
+        _check_stored(req.name)
         if not loop.resume_program(req.name, req.phase_index, req.elapsed_s):
-            return JSONResponse({"error": "Wiederaufnahme fehlgeschlagen"}, status_code=400)
+            raise HTTPException(status_code=409, detail="Wiederaufnahme fehlgeschlagen (Not-Aus verriegelt?)")
         return loop.state()
 
     @app.api_route("/api/fault/clear", methods=["GET", "POST"])
@@ -153,7 +229,16 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
 
     @app.post("/api/programs")
     async def programs_save(body: ProgramBody):
-        store.upsert(body.name, body.phases, body.old_name)
+        name = _clean_name(body.name)
+        if name is None:
+            raise HTTPException(status_code=400, detail="Programmname fehlt.")
+        target = body.old_name or name
+        if name != target and any(p.get("name") == name for p in store.list()):
+            raise HTTPException(status_code=400, detail=f"Es gibt schon ein Programm namens '{name}'.")
+        err = _validate_phases(body.phases, cfg)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+        store.upsert(name, body.phases, body.old_name)
         return store.list()
 
     @app.delete("/api/programs/{name}")
