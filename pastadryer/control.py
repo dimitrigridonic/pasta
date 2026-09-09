@@ -75,9 +75,9 @@ class ControlLoop:
         self._preheat_started: float | None = None
         self.humidity_target: float | None = None
         self.humidity_trim = 0.0   # Live-Versatz auf das Feuchte-Ziel (− = schneller, + = sanfter)
-        # Feuchte-Referenz: "all" = Schnitt aller Sensoren, "guide" = nur Leit-Sensoren
-        # (z.B. untere Reihe, die zuerst übertrocknet). Live umschaltbar.
-        self.hum_ref = "guide" if cfg.humidity_guide else "all"
+        # Feuchte-Referenz: "all" = Aggregat-Pool (die äusseren), "upper" = obere äussere,
+        # "lower" = untere äussere Sensoren. Live umschaltbar.
+        self.hum_ref = "all"
         self.safety_tripped = False
         self.last_error: str | None = None
         self._last_log = 0.0
@@ -256,8 +256,11 @@ class ControlLoop:
             self._kick()
 
     def set_hum_ref(self, mode: str) -> None:
-        """Feuchte-Referenz live umschalten: 'all' (Schnitt) | 'guide' (Leit-Sensoren)."""
-        if mode in ("all", "guide"):
+        """Feuchte-Referenz live umschalten: 'all' (Aggregat-Pool) | 'upper' (obere
+        äussere) | 'lower' (untere äussere). Alt-Wert 'guide' -> 'lower'."""
+        if mode == "guide":
+            mode = "lower"
+        if mode in ("all", "upper", "lower"):
             self.hum_ref = mode
             log.info("Feuchte-Referenz jetzt: %s", mode)
             self._kick()
@@ -345,12 +348,14 @@ class ControlLoop:
         # agg_temp/agg_hum ausschliessen. max_temp_seen bleibt bewusst über ALLE Sensoren.
         pool = [n for n in (self.cfg.aggregate_sensors or self.sensors.keys()) if n in self.sensors]
         temps = [self.sensors[n]["temp"] for n in pool if self.sensors[n]["temp"] is not None]
-        # Feuchte-Referenz: Leit-Sensoren (guide) ODER der Aggregat-Pool
-        if self.hum_ref == "guide" and self.cfg.humidity_guide:
-            names = [n for n in self.cfg.humidity_guide if n in self.sensors]
-            hums = [self.sensors[n]["hum"] for n in names if self.sensors[n]["hum"] is not None]
+        # Feuchte-Referenz: obere/untere äussere Sensoren ODER der Aggregat-Pool ("all")
+        if self.hum_ref == "upper" and self.cfg.humidity_upper:
+            names = [n for n in self.cfg.humidity_upper if n in self.sensors]
+        elif self.hum_ref == "lower" and self.cfg.humidity_lower:
+            names = [n for n in self.cfg.humidity_lower if n in self.sensors]
         else:
-            hums = [self.sensors[n]["hum"] for n in pool if self.sensors[n]["hum"] is not None]
+            names = pool
+        hums = [self.sensors[n]["hum"] for n in names if self.sensors[n]["hum"] is not None]
         all_temps = [s["temp"] for s in self.sensors.values() if s["temp"] is not None]
         self.max_temp_seen = max(all_temps) if all_temps else None
 
@@ -740,6 +745,9 @@ class ControlLoop:
                           for k, v in self.overrides.items()],
             "hum_ref": self.hum_ref,
             "humidity_guide": self.cfg.humidity_guide,
+            "humidity_upper": self.cfg.humidity_upper,
+            "humidity_lower": self.cfg.humidity_lower,
+            "aggregate_sensors": self.cfg.aggregate_sensors,
             "preheating": self.preheating,
             "preheat": ({
                 "total_min": self.cfg.preheat_min,

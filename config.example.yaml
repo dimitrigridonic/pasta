@@ -72,6 +72,11 @@ humidity_guide: ["Sensor 6", "Sensor 3", "Sensor 2", "Sensor 5"]
 # WICHTIG: der Übertemperatur-Not-Aus (max_temp) misst weiter über ALLE Sensoren.
 aggregate_sensors: ["Sensor 6", "Sensor 3", "Sensor 2", "Sensor 5"]
 
+# Feuchte-Bezug im Home-Tab live umschaltbar: Alle (aggregate_sensors) /
+# Obere (humidity_upper) / Untere (humidity_lower).
+humidity_upper: ["Sensor 2", "Sensor 5"]   # obere äussere
+humidity_lower: ["Sensor 6", "Sensor 3"]   # untere äussere
+
 logging:
   enabled: true
   file: history.db

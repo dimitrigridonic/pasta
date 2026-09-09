@@ -250,11 +250,15 @@ function render(s) {
   $("nudge-val").textContent = tr === 0 ? "normal" : (tr < 0 ? `${tr} % · schneller` : `+${tr} % · sanfter`);
 
   const hr = s.hum_ref || "all";
-  const guideNums = (s.humidity_guide || []).map((n) => (String(n).match(/\d+/) || [])[0]).filter(Boolean).join("·");
+  const nums = (arr) => (arr || []).map((n) => (String(n).match(/\d+/) || [])[0]).filter(Boolean).join("·");
+  const allN = nums(s.aggregate_sensors), upN = nums(s.humidity_upper), loN = nums(s.humidity_lower);
   $("href-all").classList.toggle("active", hr === "all");
-  $("href-guide").classList.toggle("active", hr === "guide");
-  $("href-guide").textContent = guideNums ? `Untere ${guideNums}` : "Untere";
-  $("href-val").textContent = hr === "guide" ? "Bezug: untere Reihe" : "Bezug: Schnitt aller";
+  $("href-upper").classList.toggle("active", hr === "upper");
+  $("href-lower").classList.toggle("active", hr === "lower");
+  $("href-upper").textContent = upN ? `Obere ${upN}` : "Obere";
+  $("href-lower").textContent = loN ? `Untere ${loN}` : "Untere";
+  $("href-val").textContent =
+    hr === "upper" ? "Bezug: obere äussere" : hr === "lower" ? "Bezug: untere äussere" : (allN ? `Bezug: alle äusseren ${allN}` : "Bezug: Schnitt aller");
 
   const ov = s.overrides || [];
   $("overrides-clear").classList.toggle("hidden", ov.length === 0);
@@ -303,7 +307,8 @@ $("program-skip").onclick = async () => { phaseTotal = null; await call("/api/pr
 $("nudge-faster").onclick = async () => await call("/api/program/nudge", { delta: -1 });
 $("nudge-slower").onclick = async () => await call("/api/program/nudge", { delta: 1 });
 $("href-all").onclick = async () => await call("/api/humref", { mode: "all" });
-$("href-guide").onclick = async () => await call("/api/humref", { mode: "guide" });
+$("href-upper").onclick = async () => await call("/api/humref", { mode: "upper" });
+$("href-lower").onclick = async () => await call("/api/humref", { mode: "lower" });
 $("overrides-clear").onclick = async () => await call("/api/overrides/clear", null, "POST");
 $("program-select").onchange = () => drawChart();
 $("fault-reset").onclick = async () => await call("/api/fault/clear", null, "POST");
