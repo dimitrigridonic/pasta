@@ -577,26 +577,30 @@ class ControlLoop:
             self._heater_changed_at = nowm
         self.heater_on = desired_heater
 
-        # --- Lüfter: Notnagel nur bei STILLSTAND (>fan_stall_h ohne Abfall) ---
+        # --- Abluft: FEUCHTEGESTEUERT (raus mit der feuchten Luft) ---
+        # Ziel: die feuchte Luft von innen nach aussen bringen, sobald die Feuchte
+        # zu hoch über der Ideallinie steht ODER zu langsam fällt. Nahe an der Linie
+        # wieder aus, damit nicht übertrocknet wird. Hysterese durch Zustand-Halten.
+        # (Ersetzt die alte Stillstand-Logik; fan_stall_* sind ungenutzt.)
         if floor is not None and h is not None:
-            stall = self._drop_over(self.cfg.fan_stall_h * 3600)
-            stalled = stall is not None and stall[0] < self.cfg.fan_stall_drop
-            if stalled and h > floor + hb:
-                self.venting = True
-            elif h <= floor + hb:
-                self.venting = False
+            excess = h - floor
+            too_slow = self.drop_rate is not None and self.drop_rate < self.cfg.fan_min_drop
+            if excess >= self.cfg.fan_high_margin:
+                self.venting = True          # klar zu feucht -> sofort raus damit
+            elif too_slow and excess > 0:
+                self.venting = True          # fällt zu langsam -> nachhelfen
+            elif excess <= self.cfg.fan_off_margin:
+                self.venting = False         # nahe an der Linie -> stoppen
+            # sonst: Zustand halten (Hysterese)
         else:
             self.venting = False
 
-        # --- Stellglieder: Heizung auf der aktiven Seite, Lüfter auf der GEGENüber-
-        # liegenden Seite (Querstrom durch den Kasten – die Heizung wärmt auf einer
-        # Seite, der Lüfter bläst von der anderen Seite die warme, feuchte Luft weg). ---
-        nfan = max(len(self.cfg.fans), 1)
-        fan_side = (self.active_side + 1) % nfan
+        # --- Stellglieder: Heizung auf der aktiven Seite; Abluft auf BEIDEN Seiten
+        # gleichzeitig (maximale Entfeuchtung, Frischluft strömt über die Zuluft nach). ---
         for i, hch in enumerate(self.cfg.heaters):
             self.desired[hch.point()] = self.heater_on and (i == self.active_side)
-        for i, f in enumerate(self.cfg.fans):
-            self.desired[f.point()] = self.venting and (i == fan_side)
+        for f in self.cfg.fans:
+            self.desired[f.point()] = self.venting
 
     def _phase_band(self, phase) -> tuple[float, float]:
         """Wirksames Temperaturband einer Phase (Phase überschreibt config), auf

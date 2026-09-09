@@ -119,6 +119,11 @@ class Config:
     side_bias_min: float = 2.5   # ab dieser Feuchte-Differenz (%rF) wird die feuchtere Seite bevorzugt
     humidity_guide: list[str] = field(default_factory=list)  # Leit-Sensoren für die Feuchte-Referenz (leer = alle)
     override_max_min: float = 5  # manueller Eingriff (Heizung/Lüfter erzwingen) läuft max. so lange, dann auto-aus
+    # Abluft (feuchtegesteuert): Lüfter blasen die feuchte Luft raus, sobald die Feuchte
+    # zu hoch ist oder zu langsam fällt. Ersetzt die alte Stillstand-Logik (fan_stall_*).
+    fan_high_margin: float = 4.0   # Feuchte > Ideallinie + dieser Marge (%rF) -> sofort Abluft AN
+    fan_min_drop: float = 0.5      # Abfallrate (%rF/h über rate_window_min) darunter = "zu langsam" -> Abluft AN
+    fan_off_margin: float = 1.0    # Feuchte <= Ideallinie + dieser Marge (%rF) -> Abluft AUS (nicht übertrocknen)
     # Programme
     programs: list[Program] = field(default_factory=list)
 
@@ -167,5 +172,8 @@ class Config:
             side_bias_min=float(c.get("side_bias_min", 2.5)),
             humidity_guide=[str(x) for x in (raw.get("humidity_guide") or [])],
             override_max_min=float(c.get("override_max_min", 5)),
+            fan_high_margin=float(c.get("fan_high_margin", 4.0)),
+            fan_min_drop=float(c.get("fan_min_drop", 0.5)),
+            fan_off_margin=float(c.get("fan_off_margin", 1.0)),
             programs=[Program.parse(p) for p in raw.get("programs", [])],
         )

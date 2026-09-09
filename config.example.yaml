@@ -18,11 +18,16 @@ control:
                              # höchsten temp_high aller Programme liegen (Caserecce: 38)
   humidity_hysteresis: 3     # Reserve über der Ideallinie (% rF)
   fan_cycle_min: 5           # Heizung & Lüfter wechseln links/rechts alle X Min (< heater_max_on!)
-  rate_window_min: 40        # Messfenster für die Feuchte-Abfallrate (Anzeige)
+  rate_window_min: 40        # Messfenster für die Feuchte-Abfallrate (Trigger + Anzeige)
   heater_min_on: 5           # Heizung Mindest-Laufzeit (Min, Trägheit)
   heater_min_off: 5          # Heizung Mindest-Pause (Min)
-  fan_stall_h: 5             # Lüfter erst wenn Feuchte über so viele Stunden stillsteht
-  fan_stall_drop: 1.0        # … und dabei < diesem Abfall (%-Punkte)
+  # Abluft = FEUCHTEGESTEUERT: beide Lüfter blasen die feuchte Luft raus, sobald die
+  # Feuchte zu hoch steht oder zu langsam fällt; nahe an der Ideallinie wieder aus.
+  fan_high_margin: 4.0       # Feuchte > Ideallinie + dieser Marge (%rF) -> sofort Abluft AN
+  fan_min_drop: 0.5          # Abfallrate (%rF/h) darunter = "zu langsam" -> Abluft AN
+  fan_off_margin: 1.0        # Feuchte <= Ideallinie + dieser Marge (%rF) -> Abluft AUS (nicht übertrocknen)
+  fan_stall_h: 5             # (ungenutzt seit feuchtegesteuerter Abluft)
+  fan_stall_drop: 1.0        # (ungenutzt seit feuchtegesteuerter Abluft)
   heater_max_on: 10          # SICHERHEIT: Heizung-Dauerlauf > X Min -> verriegelnder Not-Aus
   override_max_min: 5        # manueller Eingriff (Heizung/Lüfter erzwingen) läuft max. so lange -> dann auto-aus
   preheat_enabled: true      # Vorheizen (leerer Kasten) vor dem Programm
