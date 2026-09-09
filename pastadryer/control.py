@@ -340,14 +340,19 @@ class ControlLoop:
             log.warning("Sensorlesen fehlgeschlagen: %s", e)
 
     def _aggregate(self) -> None:
-        temps = [s["temp"] for s in self.sensors.values() if s["temp"] is not None]
-        # Feuchte-Referenz: alle Sensoren ODER nur die Leit-Sensoren (z.B. untere Reihe)
+        # Sensor-Pool für die Durchschnitte (Regelwert + "alle"-Feuchte): nur diese
+        # friendly_names, leer = alle. So lässt sich die schlecht belüftete Mitte aus
+        # agg_temp/agg_hum ausschliessen. max_temp_seen bleibt bewusst über ALLE Sensoren.
+        pool = [n for n in (self.cfg.aggregate_sensors or self.sensors.keys()) if n in self.sensors]
+        temps = [self.sensors[n]["temp"] for n in pool if self.sensors[n]["temp"] is not None]
+        # Feuchte-Referenz: Leit-Sensoren (guide) ODER der Aggregat-Pool
         if self.hum_ref == "guide" and self.cfg.humidity_guide:
             names = [n for n in self.cfg.humidity_guide if n in self.sensors]
             hums = [self.sensors[n]["hum"] for n in names if self.sensors[n]["hum"] is not None]
         else:
-            hums = [s["hum"] for s in self.sensors.values() if s["hum"] is not None]
-        self.max_temp_seen = max(temps) if temps else None
+            hums = [self.sensors[n]["hum"] for n in pool if self.sensors[n]["hum"] is not None]
+        all_temps = [s["temp"] for s in self.sensors.values() if s["temp"] is not None]
+        self.max_temp_seen = max(all_temps) if all_temps else None
 
         def agg(vals):
             if not vals:
@@ -595,12 +600,15 @@ class ControlLoop:
         else:
             self.venting = False
 
-        # --- Stellglieder: Heizung auf der aktiven Seite; Abluft auf BEIDEN Seiten
-        # gleichzeitig (maximale Entfeuchtung, Frischluft strömt über die Zuluft nach). ---
+        # --- Stellglieder: Heizung auf der aktiven Seite. Abluft NIE auf derselben
+        # Seite wie eine laufende Heizung (sonst wird die frisch reingeblasene Warmluft
+        # sofort wieder abgesaugt) -> bei laufender Heizung lüftet nur die GEGENseite
+        # (Querstrom quer durch den Kasten), sonst dürfen beide Seiten. ---
         for i, hch in enumerate(self.cfg.heaters):
             self.desired[hch.point()] = self.heater_on and (i == self.active_side)
-        for f in self.cfg.fans:
-            self.desired[f.point()] = self.venting
+        for i, f in enumerate(self.cfg.fans):
+            same_side_as_heater = self.heater_on and (i == self.active_side)
+            self.desired[f.point()] = self.venting and not same_side_as_heater
 
     def _phase_band(self, phase) -> tuple[float, float]:
         """Wirksames Temperaturband einer Phase (Phase überschreibt config), auf

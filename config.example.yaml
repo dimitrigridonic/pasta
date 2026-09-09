@@ -29,7 +29,7 @@ control:
   fan_stall_h: 5             # (ungenutzt seit feuchtegesteuerter Abluft)
   fan_stall_drop: 1.0        # (ungenutzt seit feuchtegesteuerter Abluft)
   heater_max_on: 10          # SICHERHEIT: Heizung-Dauerlauf > X Min -> verriegelnder Not-Aus
-  override_max_min: 5        # manueller Eingriff (Heizung/Lüfter erzwingen) läuft max. so lange -> dann auto-aus
+  override_max_min: 8        # manueller Eingriff (Heizung/Lüfter erzwingen) läuft max. so lange -> dann auto-aus (< heater_max_on!)
   preheat_enabled: true      # Vorheizen (leerer Kasten) vor dem Programm
   preheat_min: 30            # ZEITBASIERT: beide Heizungen volle Leistung so lange (Min),
                              # dann Programmstart. Kein Sensor im Kasten -> rein über Zeit.
@@ -61,11 +61,16 @@ sides:
   left:  ["Sensor 2", "Sensor 6"]
   right: ["Sensor 3", "Sensor 5"]
 
-# Feuchte-Referenz: an diesen Leit-Sensoren orientiert sich die Regelung (Ideallinie/Ruhephase).
-# Leer = Schnitt ALLER Sensoren. Die untere Reihe (6,4,5) trocknet zuerst -> dort orientieren,
-# damit unten nicht übertrocknet, während der Gesamtschnitt noch ok aussieht.
-# Im UI live umschaltbar (Alle ⌀ <-> Untere).
-humidity_guide: ["Sensor 6", "Sensor 4", "Sensor 5"]
+# Feuchte-Referenz: an diesen Leit-Sensoren orientiert sich die Ideallinie/Ruhephase.
+# Leer = der aggregate_sensors-Pool (bzw. alle). Die Mitte (S1/S4) sitzt in der schlecht
+# belüfteten Totzone -> nur die 4 äusseren nehmen (unten + oben, links + rechts).
+# Im UI live umschaltbar (Alle ⌀ <-> Guide).
+humidity_guide: ["Sensor 6", "Sensor 3", "Sensor 2", "Sensor 5"]
+
+# Sensoren für die Durchschnitte agg_temp/agg_hum (Regelwert + "alle"-Feuchte).
+# Leer = alle. Hier: Mitte (S1/S4) ausgeschlossen, nur die 4 äusseren.
+# WICHTIG: der Übertemperatur-Not-Aus (max_temp) misst weiter über ALLE Sensoren.
+aggregate_sensors: ["Sensor 6", "Sensor 3", "Sensor 2", "Sensor 5"]
 
 logging:
   enabled: true
