@@ -72,10 +72,11 @@ humidity_guide: ["Sensor 6", "Sensor 3", "Sensor 2", "Sensor 5"]
 # WICHTIG: der Übertemperatur-Not-Aus (max_temp) misst weiter über ALLE Sensoren.
 aggregate_sensors: ["Sensor 6", "Sensor 3", "Sensor 2", "Sensor 5"]
 
-# Feuchte-Bezug im Home-Tab live umschaltbar: Alle (aggregate_sensors) /
-# Obere (humidity_upper) / Untere (humidity_lower).
-humidity_upper: ["Sensor 2", "Sensor 5"]   # obere äussere
-humidity_lower: ["Sensor 6", "Sensor 3"]   # untere äussere
+# Bezug-Toggle im Home-Tab (live): schaltet Temp- UND Feuchte-Durchschnitt auf
+# Alle (aggregate_sensors) / Obere (humidity_upper) / Untere (humidity_lower).
+# Mitte (S1/S4) sitzt in der Totzone -> nur die äusseren, nach Höhe getrennt.
+humidity_upper: ["Sensor 2", "Sensor 3"]   # obere äussere (feuchter)
+humidity_lower: ["Sensor 5", "Sensor 6"]   # untere äussere (trocknen zuerst)
 
 logging:
   enabled: true

@@ -262,6 +262,7 @@ class ControlLoop:
             mode = "lower"
         if mode in ("all", "upper", "lower"):
             self.hum_ref = mode
+            self._aggregate()   # sofort neu rechnen, damit die Antwort/UI direkt stimmt
             log.info("Feuchte-Referenz jetzt: %s", mode)
             self._kick()
 
@@ -343,19 +344,17 @@ class ControlLoop:
             log.warning("Sensorlesen fehlgeschlagen: %s", e)
 
     def _aggregate(self) -> None:
-        # Sensor-Pool für die Durchschnitte (Regelwert + "alle"-Feuchte): nur diese
-        # friendly_names, leer = alle. So lässt sich die schlecht belüftete Mitte aus
-        # agg_temp/agg_hum ausschliessen. max_temp_seen bleibt bewusst über ALLE Sensoren.
-        pool = [n for n in (self.cfg.aggregate_sensors or self.sensors.keys()) if n in self.sensors]
-        temps = [self.sensors[n]["temp"] for n in pool if self.sensors[n]["temp"] is not None]
-        # Feuchte-Referenz: obere/untere äussere Sensoren ODER der Aggregat-Pool ("all")
+        # Bezug-Auswahl bestimmt den Sensor-Satz für BEIDE Durchschnitte (Temp + Feuchte):
+        # 'upper'/'lower' = die konfigurierten Gruppen, 'all' = alle Sensoren.
+        # max_temp_seen (Übertemperatur-Not-Aus) bleibt IMMER über ALLE Sensoren.
         if self.hum_ref == "upper" and self.cfg.humidity_upper:
-            names = [n for n in self.cfg.humidity_upper if n in self.sensors]
+            sel = [n for n in self.cfg.humidity_upper if n in self.sensors]
         elif self.hum_ref == "lower" and self.cfg.humidity_lower:
-            names = [n for n in self.cfg.humidity_lower if n in self.sensors]
-        else:
-            names = pool
-        hums = [self.sensors[n]["hum"] for n in names if self.sensors[n]["hum"] is not None]
+            sel = [n for n in self.cfg.humidity_lower if n in self.sensors]
+        else:  # 'all' = der Aggregat-Pool (z.B. die 4 äusseren), leer = wirklich alle
+            sel = [n for n in (self.cfg.aggregate_sensors or self.sensors.keys()) if n in self.sensors]
+        temps = [self.sensors[n]["temp"] for n in sel if self.sensors[n]["temp"] is not None]
+        hums = [self.sensors[n]["hum"] for n in sel if self.sensors[n]["hum"] is not None]
         all_temps = [s["temp"] for s in self.sensors.values() if s["temp"] is not None]
         self.max_temp_seen = max(all_temps) if all_temps else None
 

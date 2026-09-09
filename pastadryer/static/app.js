@@ -258,7 +258,7 @@ function render(s) {
   $("href-upper").textContent = upN ? `Obere ${upN}` : "Obere";
   $("href-lower").textContent = loN ? `Untere ${loN}` : "Untere";
   $("href-val").textContent =
-    hr === "upper" ? "Bezug: obere äussere" : hr === "lower" ? "Bezug: untere äussere" : (allN ? `Bezug: alle äusseren ${allN}` : "Bezug: Schnitt aller");
+    hr === "upper" ? `obere ${upN} · Temp+Feuchte` : hr === "lower" ? `untere ${loN} · Temp+Feuchte` : (allN ? `alle ${allN} · Temp+Feuchte` : "alle Sensoren");
 
   const ov = s.overrides || [];
   $("overrides-clear").classList.toggle("hidden", ov.length === 0);
