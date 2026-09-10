@@ -469,6 +469,13 @@ class ControlLoop:
         else:
             for hch in self.cfg.heaters:
                 p = hch.point()
+                # Manueller Eingriff zählt NICHT auf den Dauerlauf-Wächter (der Eingriff
+                # ist über override_max_min ohnehin zeitlich begrenzt). Dadurch kann ein
+                # auslaufender Eingriff nicht nahtlos in die Automatik überlaufen und den
+                # Not-Aus auslösen: sobald das Programm übernimmt, startet der Zähler frisch.
+                if p in self.overrides:
+                    self._heater_on_since.pop(p, None)
+                    continue
                 if self.desired.get(p):
                     self._heater_on_since.setdefault(p, nowm)
                     if nowm - self._heater_on_since[p] > self.cfg.heater_max_on * 60:
@@ -542,14 +549,17 @@ class ControlLoop:
             elif h <= floor - hb:
                 self.resting = True
                 log.info("Ruhephase: Feuchte %.1f%% unter Ideallinie %.1f%% – erholen lassen", h, floor)
-        if self.resting:
+        # Ruhephase: NICHT aktiv entfeuchten (Abluft aus). Wärme aber weiter im Band
+        # halten (rest_keep_warm), damit der Kasten nicht auskühlt – das Trocknen wird
+        # ohne Abluft nicht getrieben. Nur bei rest_keep_warm=False bleibt alles aus.
+        if self.resting and not self.cfg.rest_keep_warm:
             self.heater_on = False
             self.venting = False
             for ch in self.cfg.heaters + self.cfg.fans:
                 self.desired[ch.point()] = False
             return
 
-        # ===== Über der Linie: aktiv trocknen =====
+        # ===== Über der Linie: aktiv trocknen  (oder Ruhe mit Warmhalten) =====
         nowm = time.monotonic()
 
         # --- Heizseite wählen: die FEUCHTERE Seite gewinnt (nicht stur abwechseln) ---
@@ -564,9 +574,13 @@ class ControlLoop:
         h_side = self._side_hum(self.active_side)
         h_gate = h_side if h_side is not None else h
         humidity_ok = floor is None or (h_gate is not None and h_gate > floor - hb)
+        # In der Ruhephase (Feuchte unter der Linie) heizen wir bei rest_keep_warm
+        # TROTZDEM, um die Temperatur zu halten – die Abluft bleibt dabei aus (unten),
+        # also wird das Trocknen nicht getrieben, nur der Kasten warm gehalten.
+        heat_ok = humidity_ok or self.resting
 
         # --- Heizung: Band low..high mit Trägheit (Heizung sitzt oben, ~2-3 min bis Wirkung) ---
-        force_off = (t is None) or (not humidity_ok)   # unter der Mitte -> aus (ruhen)
+        force_off = (t is None) or (not heat_ok)   # weder über der Linie noch Warmhalten -> aus
         if force_off:
             band_on = False
         elif t < low:
@@ -591,7 +605,9 @@ class ControlLoop:
         # zu hoch über der Ideallinie steht ODER zu langsam fällt. Nahe an der Linie
         # wieder aus, damit nicht übertrocknet wird. Hysterese durch Zustand-Halten.
         # (Ersetzt die alte Stillstand-Logik; fan_stall_* sind ungenutzt.)
-        if floor is not None and h is not None:
+        if self.resting:
+            self.venting = False             # Ruhephase: nie aktiv entfeuchten (nur warm halten)
+        elif floor is not None and h is not None:
             excess = h - floor
             too_slow = self.drop_rate is not None and self.drop_rate < self.cfg.fan_min_drop
             if excess >= self.cfg.fan_high_margin:

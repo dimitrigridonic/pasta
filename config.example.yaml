@@ -12,8 +12,8 @@ web:
 control:
   poll_interval: 15          # Sekunden zwischen Regel-Ticks (liest MQTT-Cache)
   aggregate: average         # average | max | min — wie aus den Sensoren EIN Regelwert wird
-  temp_low: 30               # Heizungen AN unterhalb (°C) – Standard; je Phase überschreibbar (temp_low/temp_high)
-  temp_high: 32              # Heizungen AUS oberhalb (°C)
+  temp_low: 32               # Heizungen AN unterhalb (°C) – Standard; je Phase überschreibbar (temp_low/temp_high)
+  temp_high: 36              # Heizungen AUS oberhalb (°C) – Wärme ist der primäre Trockner (Abluft nur Notnagel)
   max_temp: 42               # harte Sicherheits-Abschaltung der Heizungen (°C) – muss ÜBER dem
                              # höchsten temp_high aller Programme liegen (Caserecce: 38)
   humidity_hysteresis: 3     # Reserve über der Ideallinie (% rF)
@@ -21,6 +21,7 @@ control:
   rate_window_min: 40        # Messfenster für die Feuchte-Abfallrate (Trigger + Anzeige)
   heater_min_on: 5           # Heizung Mindest-Laufzeit (Min, Trägheit)
   heater_min_off: 5          # Heizung Mindest-Pause (Min)
+  rest_keep_warm: true       # in der Ruhephase Temperatur im Band halten (Abluft aus), statt auszukühlen
   # Abluft = FEUCHTEGESTEUERT: beide Lüfter blasen die feuchte Luft raus, sobald die
   # Feuchte zu hoch steht oder zu langsam fällt; nahe an der Ideallinie wieder aus.
   fan_high_margin: 4.0       # Feuchte > Ideallinie + dieser Marge (%rF) -> sofort Abluft AN

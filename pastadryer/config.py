@@ -121,6 +121,7 @@ class Config:
     aggregate_sensors: list[str] = field(default_factory=list)  # Sensoren für agg_temp/agg_hum (leer = alle); schliesst z.B. die Mitte aus. Sicherheit (max_temp) bleibt über ALLE.
     humidity_upper: list[str] = field(default_factory=list)  # Feuchte-Bezug "Obere" (obere äussere Sensoren)
     humidity_lower: list[str] = field(default_factory=list)  # Feuchte-Bezug "Untere" (untere äussere Sensoren)
+    rest_keep_warm: bool = True  # in der Ruhephase Temperatur im Band halten (Abluft bleibt aus), statt auszukühlen
     override_max_min: float = 8  # manueller Eingriff (Heizung/Lüfter erzwingen) läuft max. so lange, dann auto-aus (< heater_max_on!)
     # Abluft (feuchtegesteuert): Lüfter blasen die feuchte Luft raus, sobald die Feuchte
     # zu hoch ist oder zu langsam fällt. Ersetzt die alte Stillstand-Logik (fan_stall_*).
@@ -177,6 +178,7 @@ class Config:
             aggregate_sensors=[str(x) for x in (raw.get("aggregate_sensors") or [])],
             humidity_upper=[str(x) for x in (raw.get("humidity_upper") or [])],
             humidity_lower=[str(x) for x in (raw.get("humidity_lower") or [])],
+            rest_keep_warm=bool(c.get("rest_keep_warm", True)),
             override_max_min=float(c.get("override_max_min", 8)),
             fan_high_margin=float(c.get("fan_high_margin", 4.0)),
             fan_min_drop=float(c.get("fan_min_drop", 0.5)),
