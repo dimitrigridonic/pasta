@@ -24,9 +24,13 @@ control:
   rest_keep_warm: true       # in der Ruhephase Temperatur im Band halten (Abluft aus), statt auszukühlen
   # Abluft = FEUCHTEGESTEUERT: beide Lüfter blasen die feuchte Luft raus, sobald die
   # Feuchte zu hoch steht oder zu langsam fällt; nahe an der Ideallinie wieder aus.
-  fan_high_margin: 4.0       # Feuchte > Ideallinie + dieser Marge (%rF) -> sofort Abluft AN
-  fan_min_drop: 0.5          # Abfallrate (%rF/h) darunter = "zu langsam" -> Abluft AN
+  fan_high_margin: 4.0       # Feuchte > Ideallinie + dieser Marge (%rF) -> Abluft AN (nur wenn Temp am Oberrand)
+  fan_min_drop: 0.5          # Abfallrate (%rF/h) darunter = "zu langsam" -> Abluft AN (nur wenn Temp am Oberrand)
   fan_off_margin: 1.0        # Feuchte <= Ideallinie + dieser Marge (%rF) -> Abluft AUS (nicht übertrocknen)
+  # WÄRME ZUERST: Abluft nur, wenn die Temperatur schon am Band-Oberrand ist (Heizung
+  # ausgereizt). Solange noch Heiz-Reserve da ist, wird geheizt statt gelüftet.
+  fan_needs_temp_ceiling: true   # Abluft nur bei Temp >= temp_high - fan_temp_margin
+  fan_temp_margin: 1.0           # "am Oberrand" = so viele °C unter temp_high erlaubt Abluft
   fan_stall_h: 5             # (ungenutzt seit feuchtegesteuerter Abluft)
   fan_stall_drop: 1.0        # (ungenutzt seit feuchtegesteuerter Abluft)
   heater_max_on: 10          # SICHERHEIT: Heizung-Dauerlauf > X Min -> verriegelnder Not-Aus

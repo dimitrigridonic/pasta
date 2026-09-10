@@ -605,8 +605,12 @@ class ControlLoop:
         # zu hoch über der Ideallinie steht ODER zu langsam fällt. Nahe an der Linie
         # wieder aus, damit nicht übertrocknet wird. Hysterese durch Zustand-Halten.
         # (Ersetzt die alte Stillstand-Logik; fan_stall_* sind ungenutzt.)
-        if self.resting:
-            self.venting = False             # Ruhephase: nie aktiv entfeuchten (nur warm halten)
+        # WÄRME ZUERST: nur lüften, wenn die Temperatur schon (fast) am Band-Oberrand
+        # ist – dann ist die Heizung ausgereizt. Solange noch Heiz-Reserve da ist, wird
+        # geheizt statt gelüftet (Heizen senkt die rel. Feuchte, ohne Wärme rauszublasen).
+        at_ceiling = (not self.cfg.fan_needs_temp_ceiling) or (t is not None and t >= high - self.cfg.fan_temp_margin)
+        if self.resting or not at_ceiling:
+            self.venting = False             # Ruhe ODER noch Heiz-Reserve -> keine Abluft
         elif floor is not None and h is not None:
             excess = h - floor
             too_slow = self.drop_rate is not None and self.drop_rate < self.cfg.fan_min_drop
