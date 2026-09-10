@@ -72,10 +72,16 @@ class Phase:
 class Program:
     name: str
     phases: list[Phase]
+    rest_keep_warm: bool | None = None   # überschreibt config.rest_keep_warm (None = global)
 
     @classmethod
     def parse(cls, d: dict) -> "Program":
-        return cls(name=d["name"], phases=[Phase.parse(p) for p in d.get("phases", [])])
+        rkw = d.get("rest_keep_warm")
+        return cls(
+            name=d["name"],
+            phases=[Phase.parse(p) for p in d.get("phases", [])],
+            rest_keep_warm=None if rkw is None else bool(rkw),
+        )
 
 
 @dataclass

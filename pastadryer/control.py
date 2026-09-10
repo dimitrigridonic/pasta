@@ -552,7 +552,10 @@ class ControlLoop:
         # Ruhephase: NICHT aktiv entfeuchten (Abluft aus). Wärme aber weiter im Band
         # halten (rest_keep_warm), damit der Kasten nicht auskühlt – das Trocknen wird
         # ohne Abluft nicht getrieben. Nur bei rest_keep_warm=False bleibt alles aus.
-        if self.resting and not self.cfg.rest_keep_warm:
+        # Ein Programm kann rest_keep_warm überschreiben (Spezialfall); sonst gilt config.
+        keep_warm = (self.cfg.rest_keep_warm if self.program.rest_keep_warm is None
+                     else self.program.rest_keep_warm)
+        if self.resting and not keep_warm:
             self.heater_on = False
             self.venting = False
             for ch in self.cfg.heaters + self.cfg.fans:

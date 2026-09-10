@@ -56,7 +56,7 @@ class ProgramStore:
     def get(self, name: str) -> Program | None:
         for p in self.programs:
             if p["name"] == name:
-                return Program(name=name, phases=[Phase.parse(ph) for ph in p["phases"]])
+                return Program.parse(p)   # liest auch rest_keep_warm (Spezial-Programm)
         return None
 
     def upsert(self, name: str, phases: list[dict], old_name: str | None = None) -> None:
