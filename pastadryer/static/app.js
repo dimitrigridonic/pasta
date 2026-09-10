@@ -37,10 +37,17 @@ async function api(path, body, method) {
   }
   return res.json();
 }
+// Zeitpunkt der letzten Bedien-Aktion: kurz danach dürfen Poll-Antworten NICHT rendern,
+// sonst überschreibt ein schon unterwegs gewesener (alter) Poll den frisch geklickten
+// Zustand -> Button "springt zurück". Aktion gewinnt immer, Poll übernimmt wieder nach Fenster.
+let lastActionAt = 0;
+const ACTION_GUARD_MS = 1500;
 // Bedien-Aktion: Antwort rendern, Fehler dem Nutzer zeigen (statt stiller Promise-Rejection)
 async function call(path, body, method) {
+  lastActionAt = Date.now();
   try { render(await api(path, body, method)); }
   catch (e) { alert(e.message || e); }
+  finally { lastActionAt = Date.now(); }
 }
 const fmt = (v, d = 1) => (v == null ? "–" : Number(v).toFixed(d));
 function dur(sec) {
@@ -580,7 +587,12 @@ $("prog-new").onclick = () => {
 
 /* ---------- Loop ---------- */
 async function poll() {
-  try { render(await api("/api/state")); }
+  try {
+    const s = await api("/api/state");
+    // Kurz nach einer Bedien-Aktion NICHT rendern (sonst überschreibt ein alter,
+    // noch unterwegs gewesener Poll den frisch geklickten Zustand).
+    if (Date.now() - lastActionAt > ACTION_GUARD_MS) render(s);
+  }
   catch (e) { $("conn").textContent = "⚠ keine Verbindung"; $("conn").classList.add("stale"); }
 }
 poll(); setInterval(poll, 3000);
