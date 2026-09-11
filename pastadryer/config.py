@@ -128,6 +128,7 @@ class Config:
     humidity_upper: list[str] = field(default_factory=list)  # Feuchte-Bezug "Obere" (obere äussere Sensoren)
     humidity_lower: list[str] = field(default_factory=list)  # Feuchte-Bezug "Untere" (untere äussere Sensoren)
     rest_keep_warm: bool = True  # in der Ruhephase Temperatur im Band halten (Abluft bleibt aus), statt auszukühlen
+    rest_temp_min: float = 0.0   # in der Ruhe MIT rest_keep_warm=false: sanfte Temp-Untergrenze halten (°C, 0=aus)
     fan_needs_temp_ceiling: bool = True  # Abluft NUR wenn Temp am Band-Oberrand ist (Wärme zuerst, Abluft = Notnagel)
     fan_temp_margin: float = 1.0  # "am Oberrand" = Temp >= band_high - dieser Marge (°C)
     override_max_min: float = 8  # manueller Eingriff (Heizung/Lüfter erzwingen) läuft max. so lange, dann auto-aus (< heater_max_on!)
@@ -187,6 +188,7 @@ class Config:
             humidity_upper=[str(x) for x in (raw.get("humidity_upper") or [])],
             humidity_lower=[str(x) for x in (raw.get("humidity_lower") or [])],
             rest_keep_warm=bool(c.get("rest_keep_warm", True)),
+            rest_temp_min=float(c.get("rest_temp_min", 0)),
             fan_needs_temp_ceiling=bool(c.get("fan_needs_temp_ceiling", True)),
             fan_temp_margin=float(c.get("fan_temp_margin", 1.0)),
             override_max_min=float(c.get("override_max_min", 8)),

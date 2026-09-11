@@ -556,11 +556,18 @@ class ControlLoop:
         keep_warm = (self.cfg.rest_keep_warm if self.program.rest_keep_warm is None
                      else self.program.rest_keep_warm)
         if self.resting and not keep_warm:
-            self.heater_on = False
             self.venting = False
-            for ch in self.cfg.heaters + self.cfg.fans:
-                self.desired[ch.point()] = False
-            return
+            # Ruhe ohne Trocken-Wärme: nur eine Temperatur-UNTERGRENZE halten
+            # (rest_temp_min), damit der Kasten nicht auskühlt – NICHT das volle
+            # Trockenband (das würde die Feuchte-Erholung unterdrücken). rest_temp_min<=0
+            # = wie früher alles aus. Sonst schmales Floor-Band, geteilter Heiz-Code unten.
+            if self.cfg.rest_temp_min and self.cfg.rest_temp_min > 0:
+                low, high = self.cfg.rest_temp_min, self.cfg.rest_temp_min + 1.5
+            else:
+                self.heater_on = False
+                for ch in self.cfg.heaters + self.cfg.fans:
+                    self.desired[ch.point()] = False
+                return
 
         # ===== Über der Linie: aktiv trocknen  (oder Ruhe mit Warmhalten) =====
         nowm = time.monotonic()
